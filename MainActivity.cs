@@ -18,7 +18,9 @@ using System.Linq;
 using Android.Graphics;
 using Android.Views;
 using CameraX.Handlers;
-using OpenCvSharp.Internal.Vectors;
+using CameraX.Helpers;
+using Emgu.CV.Util;
+using SkiaSharp.Views.Android;
 
 namespace CameraX
 {

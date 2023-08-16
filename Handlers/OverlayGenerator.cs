@@ -1,7 +1,7 @@
 using System;
 using Android.Graphics;
 using Android.Graphics.Drawables;
-using OpenCvSharp.Internal.Vectors;
+using Emgu.CV.Util;
 
 namespace CameraX.Handlers
 {

@@ -18,6 +18,7 @@
     <AndroidResgenFile>Resources\Resource.designer.cs</AndroidResgenFile>
     <AndroidResgenClass>Resource</AndroidResgenClass>
     <GenerateSerializationAssemblies>Off</GenerateSerializationAssemblies>
+    <AndroidUseLatestPlatformSdk>false</AndroidUseLatestPlatformSdk>
     <TargetFramework>MonoAndroid,Version=v10.0</TargetFramework>
     <TargetFrameworkVersion>v10.0</TargetFrameworkVersion>
     <AndroidManifest>Properties\AndroidManifest.xml</AndroidManifest>
@@ -42,9 +43,6 @@
     <EnableLLVM>false</EnableLLVM>
     <AndroidEnableProfiledAot>false</AndroidEnableProfiledAot>
     <BundleAssemblies>false</BundleAssemblies>
-    <AndroidSupportedAbis>armeabi-v7a;x86;arm64-v8a;x86_64</AndroidSupportedAbis>
-    <PlatformTarget>x64</PlatformTarget>
-    <Prefer32bit>true</Prefer32bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugSymbols>True</DebugSymbols>
@@ -66,7 +64,6 @@
     <Reference Include="Mono.Android" />
     <Reference Include="System.Numerics" />
     <Reference Include="System.Numerics.Vectors" />
-    <Reference Include="OpenCvSharp" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Handlers\DocumentAnalyzer.cs" />
@@ -114,8 +111,11 @@
     <Folder Include="Resources\drawable\" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="OpenCvSharp4">
-      <Version>4.7.0.20230115</Version>
+    <PackageReference Include="Emgu.CV">
+      <Version>4.7.0.5276</Version>
+    </PackageReference>
+    <PackageReference Include="Emgu.CV.runtime.xamarin.mini.android">
+      <Version>4.7.0.5276</Version>
     </PackageReference>
     <PackageReference Include="SkiaSharp.Views">
       <Version>2.88.3</Version>
@@ -189,9 +189,6 @@
     <PackageReference Include="Xamarin.AndroidX.Media2.Widget">
       <Version>1.1.0</Version>
     </PackageReference>
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="obj\Debug\android\assets\OpenCvSharp.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Xamarin\Android\Xamarin.Android.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.
