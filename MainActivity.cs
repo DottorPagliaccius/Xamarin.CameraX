@@ -15,6 +15,10 @@ using Java.Lang;
 using Java.Util;
 using Java.Util.Concurrent;
 using System.Linq;
+using Android.Graphics;
+using Android.Views;
+using CameraX.Handlers;
+using OpenCvSharp.Internal.Vectors;
 
 namespace CameraX
 {
@@ -32,8 +36,10 @@ namespace CameraX
         ImageCapture imageCapture;
         File outputDirectory;
         IExecutorService cameraExecutor;
+        VectorOfPoint _contourCoordinates;
 
         PreviewView viewFinder;
+        //SurfaceView surfaceView;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -42,8 +48,9 @@ namespace CameraX
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.activity_main);
 
-            this.viewFinder = this.FindViewById<PreviewView>(Resource.Id.viewFinder);
-            var camera_capture_button = this.FindViewById<Button>(Resource.Id.camera_capture_button);
+            viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
+            //surfaceView = FindViewById<SurfaceView>(Resource.Id.surfaceView);
+            var camera_capture_button = FindViewById<Button>(Resource.Id.camera_capture_button);
 
             // Request camera permissions   
             string[] permissions = new string[] { Manifest.Permission.Camera, Manifest.Permission.WriteExternalStorage };
@@ -107,12 +114,21 @@ namespace CameraX
 
                 // Frame by frame analyze
                 var imageAnalyzer = new ImageAnalysis.Builder().Build();
-                imageAnalyzer.SetAnalyzer(cameraExecutor, new LuminosityAnalyzer(luma =>
-                    Log.Debug(TAG, $"Average luminosity: {luma}")
-                    ));
+                // imageAnalyzer.SetAnalyzer(cameraExecutor, new LuminosityAnalyzer(luma =>
+                //     Log.Debug(TAG, $"Average luminosity: {luma}")
+                //     ));
 
+                imageAnalyzer.SetAnalyzer(cameraExecutor, new DocumentAnalyzer(docContour =>
+                {
+                    Log.Debug(TAG, $"Current Pixel data: {docContour.Size}");
+                    var boundingBox = new OverlayGenerator(docContour);
+                    viewFinder.Overlay?.Clear();
+                    viewFinder.Overlay?.Add(boundingBox);
+                }));
+                
                 // Select back camera as a default, or front camera otherwise
                 CameraSelector cameraSelector = null;
+                
                 if (cameraProvider.HasCamera(CameraSelector.DefaultBackCamera) == true)
                     cameraSelector = CameraSelector.DefaultBackCamera;
                 else if (cameraProvider.HasCamera(CameraSelector.DefaultFrontCamera) == true)
@@ -137,6 +153,48 @@ namespace CameraX
             }), ContextCompat.GetMainExecutor(this)); //GetMainExecutor: returns an Executor that runs on the main thread.
         }
 
+        // private void Canvas_PaintSurface()
+        // {
+        //     Canvas canvas = surfaceView.get;
+        //
+        //     var canvasWidth = e.Info.Width;
+        //     var canvasHeight = e.Info.Height;
+        //     var points = new System.Drawing.Point[4];
+        //
+        //     var boxData = ContourCoordinates.ToArray();
+        //
+        //     canvas.Clear();
+        //
+        //     var recHeight = 250;
+        //     DrawingHelper.DrawBackgroundRectangle(
+        //         canvas,
+        //         canvasWidth,
+        //         recHeight,
+        //         0,
+        //         canvasHeight - recHeight);
+        //
+        //     // Calculate the bounding box coordinates
+        //     int left = int.MaxValue;
+        //     int top = int.MaxValue;
+        //     int right = int.MinValue;
+        //     int bottom = int.MinValue;
+        //
+        //     for (var i = 0; i < boxData.Count(); i++)
+        //     {
+        //         System.Drawing.Point point = boxData[i];
+        //         left = Math.Min(left, point.X);
+        //         top = Math.Min(top, point.Y);
+        //         right = Math.Max(right, point.X);
+        //         bottom = Math.Max(bottom, point.Y);
+        //     }
+        //
+        //     DrawingHelper.DrawBoundingBox(
+        //         canvas,
+        //         left,
+        //         top,
+        //         right,
+        //         bottom);
+        // }
 
         private void TakePhoto()
         {

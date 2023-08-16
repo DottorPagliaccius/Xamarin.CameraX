@@ -1,8 +1,8 @@
-﻿using AndroidX.Camera.Core;
-using System;
+﻿using System;
+using AndroidX.Camera.Core;
 using static AndroidX.Camera.Core.ImageCapture;
 
-namespace CameraX
+namespace CameraX.Handlers
 {
     class ImageSaveCallback : Java.Lang.Object, IOnImageSavedCallback
     {

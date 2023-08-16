@@ -1,8 +1,8 @@
-﻿using Android.Views;
-using System;
+﻿using System;
+using Android.Views;
 using static Android.Views.View;
 
-namespace CameraX
+namespace CameraX.Handlers
 {
     class OnClickListener : Java.Lang.Object, IOnClickListener
     {

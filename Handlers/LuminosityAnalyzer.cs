@@ -1,15 +1,15 @@
-﻿using AndroidX.Camera.Core;
-using Java.Nio;
-using System;
+﻿using System;
 using System.Linq;
+using AndroidX.Camera.Core;
+using Java.Nio;
 
-namespace CameraX
+namespace CameraX.Handlers
 {
     //https://codelabs.developers.google.com/codelabs/camerax-getting-started#5
 
     public class LuminosityAnalyzer : Java.Lang.Object, ImageAnalysis.IAnalyzer
     {
-        private const string TAG = "CameraXBasic";
+        private const string TAG = "CameraXDocAnalyzer";
         private readonly Action<double> lumaListerner;
 
         public LuminosityAnalyzer(Action<double> callback) //LumaListener listener)
