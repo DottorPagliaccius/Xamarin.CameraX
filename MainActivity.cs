@@ -19,7 +19,12 @@ using Android.Graphics;
 using Android.Views;
 using CameraX.Handlers;
 using CameraX.Helpers;
+using Emgu.CV;
+using Emgu.CV.CvEnum;
+using Emgu.CV.Structure;
 using Emgu.CV.Util;
+using Java.Nio;
+using Org.Apache.Http.Util;
 using SkiaSharp.Views.Android;
 
 namespace CameraX
@@ -31,17 +36,19 @@ namespace CameraX
     [Activity(Label = "@string/app_name", Theme = "@style/AppTheme", MainLauncher = true)]
     public class MainActivity : AppCompatActivity
     {
-        private const string TAG = "CameraXBasic";
-        private const int REQUEST_CODE_PERMISSIONS = 10;
-        private const string FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS";
+        private const string Tag = "CameraXBasic";
+        private const int RequestCodePermissions = 10;
+        private const string FilenameFormat = "yyyy-MM-dd-HH-mm-ss-SSS";
+        private Bitmap _bitmapBuffer;
+        private bool _pauseAnalysis = false;
+        private int _imageRotationDegrees = 0;
 
-        ImageCapture imageCapture;
-        File outputDirectory;
-        IExecutorService cameraExecutor;
+        ImageCapture _imageCapture;
+        File _outputDirectory;
+        IExecutorService _cameraExecutor;
         VectorOfPoint _contourCoordinates;
 
-        PreviewView viewFinder;
-        //SurfaceView surfaceView;
+        PreviewView _viewFinder;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -50,34 +57,34 @@ namespace CameraX
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.activity_main);
 
-            viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
+            _viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
             //surfaceView = FindViewById<SurfaceView>(Resource.Id.surfaceView);
-            var camera_capture_button = FindViewById<Button>(Resource.Id.camera_capture_button);
+            var cameraCaptureButton = FindViewById<Button>(Resource.Id.camera_capture_button);
 
             // Request camera permissions   
             string[] permissions = new string[] { Manifest.Permission.Camera, Manifest.Permission.WriteExternalStorage };
             if (permissions.FirstOrDefault(x => ContextCompat.CheckSelfPermission(this, x) != Android.Content.PM.Permission.Granted) != null) //   ContextCompat.CheckSelfPermission(this, Manifest.Permission.Camera) == Android.Content.PM.Permission.Granted)
-                ActivityCompat.RequestPermissions(this, permissions, REQUEST_CODE_PERMISSIONS);
+                ActivityCompat.RequestPermissions(this, permissions, RequestCodePermissions);
             else
                 StartCamera();
 
             // Set up the listener for take photo button
-            camera_capture_button.SetOnClickListener(new OnClickListener(() => TakePhoto()));
+            cameraCaptureButton.SetOnClickListener(new OnClickListener(() => TakePhoto()));
 
-            outputDirectory = GetOutputDirectory();
+            _outputDirectory = GetOutputDirectory();
 
-            cameraExecutor = Executors.NewSingleThreadExecutor();
+            _cameraExecutor = Executors.NewSingleThreadExecutor();
         }
 
         protected override void OnDestroy()
         {
             base.OnDestroy();
-            cameraExecutor.Shutdown();
+            _cameraExecutor.Shutdown();
         }
 
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Android.Content.PM.Permission[] grantResults)
         {
-            if (requestCode == REQUEST_CODE_PERMISSIONS)
+            if (requestCode == RequestCodePermissions)
             {
                 //if (ContextCompat.CheckSelfPermission(this, Manifest.Permission.Camera) == Android.Content.PM.Permission.Granted)
                 if (permissions.FirstOrDefault(x => ContextCompat.CheckSelfPermission(this, x) != Android.Content.PM.Permission.Granted) == null)
@@ -109,24 +116,54 @@ namespace CameraX
 
                 // Preview
                 var preview = new Preview.Builder().Build();
-                preview.SetSurfaceProvider(viewFinder.CreateSurfaceProvider());
+                preview.SetSurfaceProvider(_viewFinder.CreateSurfaceProvider());
 
                 // Take Photo
-                this.imageCapture = new ImageCapture.Builder().Build();
+                this._imageCapture = new ImageCapture.Builder().Build();
 
                 // Frame by frame analyze
-                var imageAnalyzer = new ImageAnalysis.Builder().Build();
+                var imageAnalyzer = new ImageAnalysis.Builder()
+                    .SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)
+                    .Build();
                 // imageAnalyzer.SetAnalyzer(cameraExecutor, new LuminosityAnalyzer(luma =>
                 //     Log.Debug(TAG, $"Average luminosity: {luma}")
                 //     ));
 
-                imageAnalyzer.SetAnalyzer(cameraExecutor, new DocumentAnalyzer(docContour =>
+                // imageAnalyzer.SetAnalyzer(cameraExecutor, new DocumentAnalyzer(docContour =>
+                // {
+                //     Log.Debug(TAG, $"Current Pixel data: {docContour.Length}");
+                //     var boundingBox = new OverlayGenerator(docContour);
+                //     viewFinder.Overlay?.Clear();
+                //     viewFinder.Overlay?.Add(boundingBox);
+                //     
+                // }));
+                
+                imageAnalyzer.SetAnalyzer(_cameraExecutor, new DocumentAnalyzer( image=>
                 {
-                    Log.Debug(TAG, $"Current Pixel data: {docContour.Size}");
-                    var boundingBox = new OverlayGenerator(docContour);
-                    viewFinder.Overlay?.Clear();
-                    viewFinder.Overlay?.Add(boundingBox);
+                    try
+                    {
+                        // Initialize the bitmapBuffer if it's not already initialized
+                        if (_bitmapBuffer == null)
+                        {
+                            // The image rotation and RGB image buffer are initialized only once
+                            // the analyzer has started running
+                            _imageRotationDegrees = image.ImageInfo.RotationDegrees;
+                            _bitmapBuffer = Bitmap.CreateBitmap(
+                                image.Width, image.Height, Bitmap.Config.Argb8888);
+                        }
+
+                        ProcessEmguCV(image);
+
+                        // Compute the FPS and report prediction here
+
+                        // ...
+                    }
+                    catch (Exception exception)
+                    {
+                        Log.Error(exception.Source, exception.Message);
+                    }
                 }));
+
                 
                 // Select back camera as a default, or front camera otherwise
                 CameraSelector cameraSelector = null;
@@ -144,16 +181,73 @@ namespace CameraX
                     cameraProvider.UnbindAll();
 
                     // Bind use cases to camera
-                    cameraProvider.BindToLifecycle(this, cameraSelector, preview, imageCapture, imageAnalyzer);
+                    cameraProvider.BindToLifecycle(this, cameraSelector, preview, _imageCapture, imageAnalyzer);
                 }
                 catch (Exception exc)
                 {
-                    Log.Debug(TAG, "Use case binding failed", exc);
+                    Log.Debug(Tag, "Use case binding failed", exc);
                     Toast.MakeText(this, $"Use case binding failed: {exc.Message}", ToastLength.Short).Show();
                 }
 
             }), ContextCompat.GetMainExecutor(this)); //GetMainExecutor: returns an Executor that runs on the main thread.
         }
+
+        private void ProcessEmguCV(IImageProxy imageProxy)
+        {
+            try
+            {
+                var image = imageProxy.Image;
+
+                byte[] bytes;
+
+                // Copy out RGB bits to our shared buffer
+                using (var buffer = image.GetPlanes()[0].Buffer)
+                {
+                    bytes = new byte[buffer.Remaining()];
+                    buffer.Get(bytes);
+                }
+
+                // Perform the EmguCV processing
+                using (var bitmapImage = new Image<Gray, byte>(image.Width, image.Height))
+                {
+                    bitmapImage.Bytes = bytes;
+
+                    using (var blurredImage = bitmapImage.SmoothGaussian(5, 5, 0, 0))
+                    {
+                        using (var cannyImage = new UMat())
+                        {
+                            CvInvoke.Canny(blurredImage, cannyImage, 50, 150);
+
+                            using (var contours = new VectorOfVectorOfPoint())
+                            {
+                                CvInvoke.FindContours(cannyImage, contours, null, RetrType.Tree,
+                                    ChainApproxMethod.ChainApproxSimple);
+                                if (contours.Size > 0)
+                                {
+                                    var emguHandle = new EmguHelper();
+                                    var top5Contours = emguHandle.SelectContours(contours);
+                                    emguHandle.SelectTopContour(top5Contours);
+                                    _viewFinder.Overlay?.Clear();
+                                    if (emguHandle.ContourCoordinates != null)
+                                    {
+                                        var boundingBox = new OverlayGenerator(emguHandle.ContourCoordinates);
+                                        _viewFinder.Overlay?.Add(boundingBox);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Close the imageProxy after processing
+                //imageProxy.Close();
+            }
+            catch (Exception exception)
+            {
+                Log.Error(exception.Source, exception.Message);
+            }
+        }
+
 
         // private void Canvas_PaintSurface()
         // {
@@ -201,12 +295,12 @@ namespace CameraX
         private void TakePhoto()
         {
             // Get a stable reference of the modifiable image capture use case   
-            var imageCapture = this.imageCapture;
+            var imageCapture = this._imageCapture;
             if (imageCapture == null)
                 return;
 
             // Create time-stamped output file to hold the image
-            var photoFile = new File(outputDirectory, new Java.Text.SimpleDateFormat(FILENAME_FORMAT, Locale.Us).Format(JavaSystem.CurrentTimeMillis()) + ".jpg");
+            var photoFile = new File(_outputDirectory, new Java.Text.SimpleDateFormat(FilenameFormat, Locale.Us).Format(JavaSystem.CurrentTimeMillis()) + ".jpg");
 
             // Create output options object which contains file + metadata
             var outputOptions = new ImageCapture.OutputFileOptions.Builder(photoFile).Build();
@@ -217,7 +311,7 @@ namespace CameraX
                 onErrorCallback: (exc) =>
                 {
                     var msg = $"Photo capture failed: {exc.Message}";
-                    Log.Error(TAG, msg, exc);
+                    Log.Error(Tag, msg, exc);
                     Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
                 },
 
@@ -225,7 +319,7 @@ namespace CameraX
                 {
                     var savedUri = output.SavedUri;
                     var msg = $"Photo capture succeeded: {savedUri}";
-                    Log.Debug(TAG, msg);
+                    Log.Debug(Tag, msg);
                     Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
                 }
             ));

@@ -17,68 +17,50 @@ namespace CameraX.Handlers
     public class DocumentAnalyzer: Java.Lang.Object, ImageAnalysis.IAnalyzer
     {
         private const string TAG = "CameraXBasic";
-        private readonly Action<VectorOfPoint> docListener;
+        private readonly Action<IImageProxy> docListener;
         private byte[] depthPixelData;
 
-        public DocumentAnalyzer(Action<VectorOfPoint> callback) //LumaListener listener)
+        public DocumentAnalyzer(Action<IImageProxy> callback) //LumaListener listener)
         {
             docListener = callback;
         }
 
-        public void Analyze(IImageProxy image)
+        public void Analyze(IImageProxy imageProxy)
         {
-            try
-            {
-                ByteBuffer buffer = image.GetPlanes()[0].Buffer;
-                //var bitmap = FromByteBuffer(buffer);
-                FromByteBuffer(buffer);
-                //byte[] depthPixelData = new byte[bitmap.Height * bitmap.Width]; // your data
-                Image<Bgr, byte> bitmapImage = new Image<Bgr, byte>(image.Width, image.Height);
-                
-                image.Close();
-                // Ensure that depthPixelData has the correct size (width * height * channels)
-                if (depthPixelData.Length == image.Width * image.Height * 3) // Assuming 3 channels for BGR
-                {
-                    // Fill the Emgu.CV image with the pixel data
-                    int pixelIndex = 0;
-                    for (int y = 0; y < image.Height; y++)
-                    {
-                        for (int x = 0; x < image.Width; x++)
-                        {
-                            byte blue = depthPixelData[pixelIndex++];
-                            byte green = depthPixelData[pixelIndex++];
-                            byte red = depthPixelData[pixelIndex++];
-                            bitmapImage[y, x] = new Bgr(blue, green, red);
-                        }
-                    }
-                }
-                else
-                {
-                    Log.Error(TAG, "Invalid depthPixelData dimensions");
-                }
-
-                //var bitmapImage = new Image<Bgr, byte>(bitmap);
-                using var grayScaleImage = bitmapImage.Convert<Gray, byte>();
-                using var blurredImage = grayScaleImage.SmoothGaussian(5, 5, 0, 0);
-                using var cannyImage = new UMat();
-                CvInvoke.Canny(blurredImage, cannyImage, 50, 150);
-
-                using var contours = new VectorOfVectorOfPoint();
-                CvInvoke.FindContours(cannyImage, contours, null, RetrType.Tree, ChainApproxMethod.ChainApproxSimple);
-                if (contours.Length > 0)
-                {
-                    var top5Contours = SelectContours(contours);
-                    SelectTopContour(top5Contours);
-                    //CvInvoke.DrawContours(bitmapImage, mainContour, 1, new           MCvScalar(0, 0, 255));
-                }
-            }
-            catch (Exception exception)
-            {
-                Log.Error(exception.Source, exception.Message);
-            }
-
-            image.Close();
-            docListener.Invoke(ContourCoordinates);
+            // try
+            // {
+            //     var image = imageProxy.Image;
+            //     
+            //     ByteBuffer buffer = image.GetPlanes()[0].Buffer;
+            //     //var bitmap = FromByteBuffer(buffer);
+            //     FromByteBuffer(buffer);
+            //     imageProxy.Close();
+            //     //byte[] depthPixelData = new byte[bitmap.Height * bitmap.Width]; // your data
+            //     Image<Gray, byte> bitmapImage = new Image<Gray, byte>(image.Width, image.Height);
+            //     bitmapImage.Bytes = depthPixelData;
+            //     //var bitmapImage = new Image<Bgr, byte>(bitmap);
+            //     //using var grayScaleImage = bitmapImage.Convert<Gray, byte>();
+            //     
+            //     using var blurredImage = bitmapImage.SmoothGaussian(5, 5, 0, 0);
+            //     using var cannyImage = new UMat();
+            //     CvInvoke.Canny(blurredImage, cannyImage, 50, 150);
+            //
+            //     using var contours = new VectorOfVectorOfPoint();
+            //     CvInvoke.FindContours(cannyImage, contours, null, RetrType.Tree, ChainApproxMethod.ChainApproxSimple);
+            //     if (contours.Length > 0)
+            //     {
+            //         var top5Contours = SelectContours(contours);
+            //         SelectTopContour(top5Contours);
+            //         //CvInvoke.DrawContours(bitmapImage, mainContour, 1, new           MCvScalar(0, 0, 255));
+            //     }
+            // }
+            // catch (Exception exception)
+            // {
+            //     Log.Error(exception.Source, exception.Message);
+            // }
+            //
+            // //image.Close();
+            docListener.Invoke(imageProxy);
         }
         
         private void FromByteBuffer(ByteBuffer buffer)
@@ -100,7 +82,7 @@ namespace CameraX.Handlers
             return top5Contours;
         }
 
-        private VectorOfPoint SelectTopContour(VectorOfPoint[] contours)
+        private void SelectTopContour(VectorOfPoint[] contours)
         {
             foreach (var contourVector in contours)
             {
@@ -112,9 +94,7 @@ namespace CameraX.Handlers
                         ContourCoordinates = contour;
                 }
             }
-            return null;
         }
-
-        private VectorOfPoint ContourCoordinates { get; set; }
+        private VectorOfPoint ContourCoordinates { get; set; } = new VectorOfPoint();
     }
 }

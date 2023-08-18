@@ -33,15 +33,15 @@ namespace CameraX.Handlers
         
         public OverlayGenerator(VectorOfPoint contourData)
         {
-            _contourData = contourData;
+            _contourData = contourData ?? new VectorOfPoint();
         }
 
         public override void Draw(Canvas canvas)
         {
             var boxData = _contourData.ToArray();
             // Calculate the bounding box coordinates
-            var left = int.MaxValue;
-            var top = int.MaxValue;
+            var left = int.MinValue;
+            var top = int.MinValue;
             var right = int.MinValue;
             var bottom = int.MinValue;
 
