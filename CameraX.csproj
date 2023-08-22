@@ -26,6 +26,7 @@
     <AndroidEnableSGenConcurrent>true</AndroidEnableSGenConcurrent>
     <AndroidUseAapt2>true</AndroidUseAapt2>
     <AndroidHttpClientHandlerType>Xamarin.Android.Net.AndroidClientHandler</AndroidHttpClientHandlerType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>True</DebugSymbols>
@@ -58,6 +59,12 @@
     <EmbedAssembliesIntoApk>True</EmbedAssembliesIntoApk>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="LibYuvSharp">
+      <HintPath>obj\Debug\android\assets\LibYuvSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="OpenCV">
+      <HintPath>..\Xamarin.Android.OpenCV\src\OpenCV.Binding\bin\Debug\AnyCPU\OpenCV.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Xml" />
     <Reference Include="System.Core" />
@@ -66,12 +73,14 @@
     <Reference Include="System.Numerics.Vectors" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Handlers\CannyImageDetector.cs" />
     <Compile Include="Handlers\DocumentAnalyzer.cs" />
     <Compile Include="Handlers\ImageSaveCallback.cs" />
     <Compile Include="Handlers\LuminosityAnalyzer.cs" />
     <Compile Include="Handlers\OverlayGenerator.cs" />
     <Compile Include="Helpers\DrawingHelper.cs" />
     <Compile Include="Helpers\EmguHelper.cs" />
+    <Compile Include="Helpers\YUUVHelper.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Handlers\OnClickListener.cs" />
     <Compile Include="Resources\Resource.designer.cs" />
@@ -112,11 +121,17 @@
     <Folder Include="Resources\drawable\" />
   </ItemGroup>
   <ItemGroup>
+    <PackageReference Include="ColorHelper">
+      <Version>1.8.1</Version>
+    </PackageReference>
     <PackageReference Include="Emgu.CV">
       <Version>4.7.0.5276</Version>
     </PackageReference>
     <PackageReference Include="Emgu.CV.runtime.xamarin.mini.android">
       <Version>4.7.0.5276</Version>
+    </PackageReference>
+    <PackageReference Include="Lennox.LibYuvSharp">
+      <Version>1.1.2</Version>
     </PackageReference>
     <PackageReference Include="SkiaSharp.Views">
       <Version>2.88.3</Version>
@@ -190,6 +205,15 @@
     <PackageReference Include="Xamarin.AndroidX.Media2.Widget">
       <Version>1.1.0</Version>
     </PackageReference>
+  </ItemGroup>
+  <ItemGroup>
+    <AndroidJavaLibrary Remove="Helpers\YUV\**" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="LibYuvSharp.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <Content Include="obj\Debug\android\assets\LibYuvSharp.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Xamarin\Android\Xamarin.Android.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.

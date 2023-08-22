@@ -16,7 +16,10 @@ using Java.Util;
 using Java.Util.Concurrent;
 using System.Linq;
 using Android.Graphics;
+using Android.Media;
+using Android.Opengl;
 using Android.Views;
+using AndroidX.AppCompat.Widget;
 using CameraX.Handlers;
 using CameraX.Helpers;
 using Emgu.CV;
@@ -24,8 +27,10 @@ using Emgu.CV.CvEnum;
 using Emgu.CV.Structure;
 using Emgu.CV.Util;
 using Java.Nio;
-using Org.Apache.Http.Util;
-using SkiaSharp.Views.Android;
+using Lennox.LibYuvSharp;
+using OpenCV.Android;
+using Mat = OpenCV.Core.Mat;
+using Matrix = Android.Graphics.Matrix;
 
 namespace CameraX
 {
@@ -42,13 +47,21 @@ namespace CameraX
         private Bitmap _bitmapBuffer;
         private bool _pauseAnalysis = false;
         private int _imageRotationDegrees = 0;
+        private BaseLoaderCallback _callback;
+        private int width;
+        private int height;
 
+
+
+        private CannyImageDetector cannyImageDetector = new CannyImageDetector();
         ImageCapture _imageCapture;
         File _outputDirectory;
         IExecutorService _cameraExecutor;
         VectorOfPoint _contourCoordinates;
-
+        ImageView imageView;
         PreviewView _viewFinder;
+        SwitchCompat cannySwitch;
+        
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -58,7 +71,19 @@ namespace CameraX
             SetContentView(Resource.Layout.activity_main);
 
             _viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
-            //surfaceView = FindViewById<SurfaceView>(Resource.Id.surfaceView);
+            cannySwitch = FindViewById<SwitchCompat>(Resource.Id.cannySwitch);
+            cannySwitch.CheckedChange += (sender, e) =>
+            {
+                if (e.IsChecked)
+                {
+                    imageView.Visibility = ViewStates.Visible;
+                }
+                else
+                {
+                    imageView.Visibility = ViewStates.Invisible;
+                }
+            };
+            imageView = FindViewById<ImageView>(Resource.Id.imageView);
             var cameraCaptureButton = FindViewById<Button>(Resource.Id.camera_capture_button);
 
             // Request camera permissions   
@@ -129,39 +154,45 @@ namespace CameraX
                 //     Log.Debug(TAG, $"Average luminosity: {luma}")
                 //     ));
 
-                // imageAnalyzer.SetAnalyzer(cameraExecutor, new DocumentAnalyzer(docContour =>
-                // {
-                //     Log.Debug(TAG, $"Current Pixel data: {docContour.Length}");
-                //     var boundingBox = new OverlayGenerator(docContour);
-                //     viewFinder.Overlay?.Clear();
-                //     viewFinder.Overlay?.Add(boundingBox);
-                //     
-                // }));
-                
-                imageAnalyzer.SetAnalyzer(_cameraExecutor, new DocumentAnalyzer( image=>
+                imageAnalyzer.SetAnalyzer(_cameraExecutor, new DocumentAnalyzer(imageProxy =>
                 {
-                    try
-                    {
-                        // Initialize the bitmapBuffer if it's not already initialized
-                        if (_bitmapBuffer == null)
-                        {
-                            // The image rotation and RGB image buffer are initialized only once
-                            // the analyzer has started running
-                            _imageRotationDegrees = image.ImageInfo.RotationDegrees;
-                            _bitmapBuffer = Bitmap.CreateBitmap(
-                                image.Width, image.Height, Bitmap.Config.Argb8888);
-                        }
+                    Log.Debug("Debug", $"Current Pixel data: {imageProxy.Height}");
+                    var image = imageProxy.Image;
+                    height = image.Height;
+                    width = image.Width;
+                    ByteBuffer imageData = image.GetPlanes()[0].Buffer;
+                    var bitmap = OpenCVHelper(imageData);
 
-                        ProcessEmguCV(image);
+                    var test = imageProxy.ImageInfo.RotationDegrees;
+                    var imgviewWidth = imageView.Width;
+                    var imgviewHeight = imageView.Height;
+                    // Calculate the aspect ratio of the original processedBitmap
+                    float aspectRatio = (float)bitmap.Width / (float)bitmap.Height;
 
-                        // Compute the FPS and report prediction here
-
-                        // ...
+                    // Get the dimensions of the PreviewView
+                    int previewWidth = _viewFinder.Width;
+                    int previewHeight = _viewFinder.Height;
+                    
+                    imageProxy.Close();
+                    
+                    // Calculate the new dimensions for the scaled image while maintaining the aspect ratio
+                    int newWidth, newHeight;
+                    if (aspectRatio > 1) {
+                        // Landscape orientation
+                        newWidth = previewWidth;
+                        newHeight = (int)(previewWidth / aspectRatio);
+                    } else {
+                        // Portrait orientation or square
+                        newHeight = previewHeight;
+                        newWidth = (int)(previewHeight * aspectRatio);
                     }
-                    catch (Exception exception)
+
+                    // Create a scaled bitmap using the new dimensions
+                    Bitmap scaledBitmap = Bitmap.CreateScaledBitmap(bitmap, newWidth, newHeight, true);
+                    RunOnUiThread(() =>
                     {
-                        Log.Error(exception.Source, exception.Message);
-                    }
+                        imageView.SetImageBitmap(scaledBitmap);
+                    });
                 }));
 
                 
@@ -192,106 +223,71 @@ namespace CameraX
             }), ContextCompat.GetMainExecutor(this)); //GetMainExecutor: returns an Executor that runs on the main thread.
         }
 
-        private void ProcessEmguCV(IImageProxy imageProxy)
+        private Bitmap OpenCVHelper(ByteBuffer imageData)
         {
-            try
+            var filteredMat = cannyImageDetector.Update(imageData, height, width);
+
+            var originalOrientation = 0;
+
+            var bitmapFiltered = 
+                Bitmap.CreateBitmap(
+                    width, height,
+                    Bitmap.Config.Argb8888
+                );
+
+             Utils.MatToBitmap(filteredMat, bitmapFiltered);
+             
+             // Apply the original orientation transformation to the bitmap
+             Matrix matrix = new Matrix();
+             matrix.PostRotate(90);
+
+             Bitmap rotatedBitmap = Bitmap.CreateBitmap(bitmapFiltered, 0, 0, filteredMat.Width(), filteredMat.Height(), matrix, true);
+             
+             return rotatedBitmap;
+             //var boundingBox = new OverlayGenerator(imageProxy);
+             // _viewFinder.Overlay?.Clear();
+             // _viewFinder.Overlay?.Add(boundingBox);
+        }
+        
+        protected override void OnResume()
+        {
+            base.OnResume();
+
+            if(!OpenCVLoader.InitDebug())
             {
-                var image = imageProxy.Image;
-
-                byte[] bytes;
-
-                // Copy out RGB bits to our shared buffer
-                using (var buffer = image.GetPlanes()[0].Buffer)
-                {
-                    bytes = new byte[buffer.Remaining()];
-                    buffer.Get(bytes);
-                }
-
-                // Perform the EmguCV processing
-                using (var bitmapImage = new Image<Gray, byte>(image.Width, image.Height))
-                {
-                    bitmapImage.Bytes = bytes;
-
-                    using (var blurredImage = bitmapImage.SmoothGaussian(5, 5, 0, 0))
-                    {
-                        using (var cannyImage = new UMat())
-                        {
-                            CvInvoke.Canny(blurredImage, cannyImage, 50, 150);
-
-                            using (var contours = new VectorOfVectorOfPoint())
-                            {
-                                CvInvoke.FindContours(cannyImage, contours, null, RetrType.Tree,
-                                    ChainApproxMethod.ChainApproxSimple);
-                                if (contours.Size > 0)
-                                {
-                                    var emguHandle = new EmguHelper();
-                                    var top5Contours = emguHandle.SelectContours(contours);
-                                    emguHandle.SelectTopContour(top5Contours);
-                                    _viewFinder.Overlay?.Clear();
-                                    if (emguHandle.ContourCoordinates != null)
-                                    {
-                                        var boundingBox = new OverlayGenerator(emguHandle.ContourCoordinates);
-                                        _viewFinder.Overlay?.Add(boundingBox);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // Close the imageProxy after processing
-                //imageProxy.Close();
+                Log.Debug("CameraPreview", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+                OpenCVLoader.InitAsync(OpenCVLoader.OpencvVersion300, this, _callback);
             }
-            catch (Exception exception)
+            else
             {
-                Log.Error(exception.Source, exception.Message);
+                Log.Debug("CameraPreview", "OpenCV library found inside package. Using it!");
             }
         }
+        
+        private void DrawImage(Bitmap bitmap)
+        {
+            if (bitmap != null && bitmap.Width > 0 && bitmap.Height > 0) {
+                imageView.SetImageBitmap(bitmap);
+            } 
+            else
+            {
+                Log.Debug("FML", "I'm tired boss.");
+            }
 
-
-        // private void Canvas_PaintSurface()
-        // {
-        //     Canvas canvas = surfaceView.get;
-        //
-        //     var canvasWidth = e.Info.Width;
-        //     var canvasHeight = e.Info.Height;
-        //     var points = new System.Drawing.Point[4];
-        //
-        //     var boxData = ContourCoordinates.ToArray();
-        //
-        //     canvas.Clear();
-        //
-        //     var recHeight = 250;
-        //     DrawingHelper.DrawBackgroundRectangle(
-        //         canvas,
-        //         canvasWidth,
-        //         recHeight,
-        //         0,
-        //         canvasHeight - recHeight);
-        //
-        //     // Calculate the bounding box coordinates
-        //     int left = int.MaxValue;
-        //     int top = int.MaxValue;
-        //     int right = int.MinValue;
-        //     int bottom = int.MinValue;
-        //
-        //     for (var i = 0; i < boxData.Count(); i++)
-        //     {
-        //         System.Drawing.Point point = boxData[i];
-        //         left = Math.Min(left, point.X);
-        //         top = Math.Min(top, point.Y);
-        //         right = Math.Max(right, point.X);
-        //         bottom = Math.Max(bottom, point.Y);
-        //     }
-        //
-        //     DrawingHelper.DrawBoundingBox(
-        //         canvas,
-        //         left,
-        //         top,
-        //         right,
-        //         bottom);
-        // }
-
+            // if (mProps.ShowFps)
+            // {
+            //     textViewFps.Post(() =>
+            //     {
+            //         textViewFps.Text = $"{mFps.Update()} FPS";
+            //     });
+            // }
+            //
+            // if (ShutterPressed)
+            // {
+            //     SaveImage(bitmap, "android-camera");
+            //     mShutterPressed = false;
+            // }
+        }
         private void TakePhoto()
         {
             // Get a stable reference of the modifiable image capture use case   
