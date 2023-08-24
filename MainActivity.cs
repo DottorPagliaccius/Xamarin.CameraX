@@ -61,6 +61,7 @@ namespace CameraX
         ImageView imageView;
         PreviewView _viewFinder;
         SwitchCompat cannySwitch;
+        TextView fpsTextView;
         
 
         protected override void OnCreate(Bundle savedInstanceState)
@@ -71,6 +72,7 @@ namespace CameraX
             SetContentView(Resource.Layout.activity_main);
 
             _viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
+            fpsTextView = FindViewById<TextView>(Resource.Id.fpsTextView);
             cannySwitch = FindViewById<SwitchCompat>(Resource.Id.cannySwitch);
             cannySwitch.CheckedChange += (sender, e) =>
             {
@@ -150,22 +152,26 @@ namespace CameraX
                 var imageAnalyzer = new ImageAnalysis.Builder()
                     .SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)
                     .Build();
-                // imageAnalyzer.SetAnalyzer(cameraExecutor, new LuminosityAnalyzer(luma =>
-                //     Log.Debug(TAG, $"Average luminosity: {luma}")
-                //     ));
 
                 imageAnalyzer.SetAnalyzer(_cameraExecutor, new DocumentAnalyzer(imageProxy =>
                 {
-                    Log.Debug("Debug", $"Current Pixel data: {imageProxy.Height}");
+                    long currentTimestamp = JavaSystem.CurrentTimeMillis();
+                    frameCount++;
+
+                    if (currentTimestamp - lastTimestamp >= 1000) // Calculate FPS every second
+                    {
+                        fps = frameCount / ((currentTimestamp - lastTimestamp) / 1000.0);
+                        frameCount = 0;
+                        lastTimestamp = currentTimestamp;
+                        Log.Debug("Debug", $"Current FPS data: {fps}");
+                    }
+                    
                     var image = imageProxy.Image;
                     height = image.Height;
                     width = image.Width;
                     ByteBuffer imageData = image.GetPlanes()[0].Buffer;
                     var bitmap = OpenCVHelper(imageData);
-
-                    var test = imageProxy.ImageInfo.RotationDegrees;
-                    var imgviewWidth = imageView.Width;
-                    var imgviewHeight = imageView.Height;
+                    
                     // Calculate the aspect ratio of the original processedBitmap
                     float aspectRatio = (float)bitmap.Width / (float)bitmap.Height;
 
@@ -181,20 +187,25 @@ namespace CameraX
                         // Landscape orientation
                         newWidth = previewWidth;
                         newHeight = (int)(previewWidth / aspectRatio);
-                    } else {
+                    } 
+                    else 
+                    {
                         // Portrait orientation or square
-                        newHeight = previewHeight;
+                        newHeight = previewHeight ;
                         newWidth = (int)(previewHeight * aspectRatio);
                     }
 
+                    //bitmap = ZoomInBitmap(bitmap, previewWidth, previewHeight);
+
                     // Create a scaled bitmap using the new dimensions
                     Bitmap scaledBitmap = Bitmap.CreateScaledBitmap(bitmap, newWidth, newHeight, true);
+                    //scaledBitmap = Bitmap.CreateScaledBitmap(scaledBitmap, previewWidth, previewHeight, false);
                     RunOnUiThread(() =>
                     {
                         imageView.SetImageBitmap(scaledBitmap);
+                        UpdateFPS(fps);
                     });
                 }));
-
                 
                 // Select back camera as a default, or front camera otherwise
                 CameraSelector cameraSelector = null;
@@ -222,7 +233,45 @@ namespace CameraX
 
             }), ContextCompat.GetMainExecutor(this)); //GetMainExecutor: returns an Executor that runs on the main thread.
         }
+        private void UpdateFPS(double fps)
+        {
+            fpsTextView.Text = $"FPS: {fps:F2}";
+        }
+        public long lastTimestamp { get; set; } = 0;
 
+        public int frameCount { get; set; } = 0;
+
+        public double fps { get; set; } = 0;
+        
+        public Bitmap ZoomInBitmap(Bitmap bitmap, int targetWidth, int targetHeight)
+        {
+            // Calculate the scaling factors for width and height
+            float scaleX = (float)bitmap.Width / targetWidth;
+            float scaleY = (float)bitmap.Height / targetHeight;
+
+            // Calculate the scaling factor that maintains the aspect ratio
+            float scaleFactor = Math.Max(scaleX, scaleY);
+
+            // Calculate the dimensions of the cropped image
+            int scaledWidth = (int)(bitmap.Width / scaleFactor);
+            int scaledHeight = (int)(bitmap.Height / scaleFactor);
+
+            // Ensure that the scaled dimensions are not larger than the original dimensions
+            scaledWidth = Math.Min(scaledWidth, bitmap.Width);
+            scaledHeight = Math.Min(scaledHeight, bitmap.Height);
+
+            // Calculate the cropping coordinates
+            int left = Math.Max((bitmap.Width - scaledWidth) / 2, 0);
+            int top = Math.Max((bitmap.Height - scaledHeight) / 2, 0);
+            int right = Math.Min(left + scaledWidth, bitmap.Width);
+            int bottom = Math.Min(top + scaledHeight, bitmap.Height);
+
+            // Create a cropped bitmap
+            Bitmap croppedBitmap = Bitmap.CreateBitmap(bitmap, left, top, right - left, bottom - top);
+
+            return croppedBitmap;
+        }
+        
         private Bitmap OpenCVHelper(ByteBuffer imageData)
         {
             var filteredMat = cannyImageDetector.Update(imageData, height, width);
@@ -262,31 +311,6 @@ namespace CameraX
             {
                 Log.Debug("CameraPreview", "OpenCV library found inside package. Using it!");
             }
-        }
-        
-        private void DrawImage(Bitmap bitmap)
-        {
-            if (bitmap != null && bitmap.Width > 0 && bitmap.Height > 0) {
-                imageView.SetImageBitmap(bitmap);
-            } 
-            else
-            {
-                Log.Debug("FML", "I'm tired boss.");
-            }
-
-            // if (mProps.ShowFps)
-            // {
-            //     textViewFps.Post(() =>
-            //     {
-            //         textViewFps.Text = $"{mFps.Update()} FPS";
-            //     });
-            // }
-            //
-            // if (ShutterPressed)
-            // {
-            //     SaveImage(bitmap, "android-camera");
-            //     mShutterPressed = false;
-            // }
         }
         private void TakePhoto()
         {

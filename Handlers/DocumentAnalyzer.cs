@@ -16,9 +16,7 @@ namespace CameraX.Handlers
 {
     public class DocumentAnalyzer: Java.Lang.Object, ImageAnalysis.IAnalyzer
     {
-        private const string TAG = "CameraXBasic";
         private readonly Action<IImageProxy> docListener;
-        private byte[] depthPixelData;
 
         public DocumentAnalyzer(Action<IImageProxy> callback) //LumaListener listener)
         {
