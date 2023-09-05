@@ -77,10 +77,6 @@
     <Compile Include="Handlers\DocumentAnalyzer.cs" />
     <Compile Include="Handlers\ImageSaveCallback.cs" />
     <Compile Include="Handlers\LuminosityAnalyzer.cs" />
-    <Compile Include="Handlers\OverlayGenerator.cs" />
-    <Compile Include="Helpers\DrawingHelper.cs" />
-    <Compile Include="Helpers\EmguHelper.cs" />
-    <Compile Include="Helpers\YUUVHelper.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Handlers\OnClickListener.cs" />
     <Compile Include="Resources\Resource.designer.cs" />
@@ -210,9 +206,6 @@
     <AndroidJavaLibrary Remove="Helpers\YUV\**" />
   </ItemGroup>
   <ItemGroup>
-    <EmbeddedResource Include="LibYuvSharp.dll">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </EmbeddedResource>
     <Content Include="obj\Debug\android\assets\LibYuvSharp.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Xamarin\Android\Xamarin.Android.CSharp.targets" />

@@ -21,14 +21,14 @@ using Android.Opengl;
 using Android.Views;
 using AndroidX.AppCompat.Widget;
 using CameraX.Handlers;
-using CameraX.Helpers;
-using Emgu.CV;
-using Emgu.CV.CvEnum;
-using Emgu.CV.Structure;
 using Emgu.CV.Util;
 using Java.Nio;
 using Lennox.LibYuvSharp;
 using OpenCV.Android;
+using OpenCV.Core;
+using OpenCV.ImgCodecs;
+using OpenCV.ImgProc;
+using Console = System.Console;
 using Mat = OpenCV.Core.Mat;
 using Matrix = Android.Graphics.Matrix;
 
@@ -48,20 +48,19 @@ namespace CameraX
         private bool _pauseAnalysis = false;
         private int _imageRotationDegrees = 0;
         private BaseLoaderCallback _callback;
-        private int width;
-        private int height;
+        private int _width;
+        private int _height;
+        private bool _captureClicked;
 
-
-
-        private CannyImageDetector cannyImageDetector = new CannyImageDetector();
+        private CannyImageDetector _cannyImageDetector = new CannyImageDetector();
         ImageCapture _imageCapture;
         File _outputDirectory;
         IExecutorService _cameraExecutor;
         VectorOfPoint _contourCoordinates;
-        ImageView imageView;
+        ImageView _imageView;
         PreviewView _viewFinder;
-        SwitchCompat cannySwitch;
-        TextView fpsTextView;
+        SwitchCompat _cannySwitch;
+        TextView _fpsTextView;
         
 
         protected override void OnCreate(Bundle savedInstanceState)
@@ -72,20 +71,20 @@ namespace CameraX
             SetContentView(Resource.Layout.activity_main);
 
             _viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
-            fpsTextView = FindViewById<TextView>(Resource.Id.fpsTextView);
-            cannySwitch = FindViewById<SwitchCompat>(Resource.Id.cannySwitch);
-            cannySwitch.CheckedChange += (sender, e) =>
+            _fpsTextView = FindViewById<TextView>(Resource.Id.fpsTextView);
+            _cannySwitch = FindViewById<SwitchCompat>(Resource.Id.cannySwitch);
+            _cannySwitch.CheckedChange += (sender, e) =>
             {
                 if (e.IsChecked)
                 {
-                    imageView.Visibility = ViewStates.Visible;
+                    _imageView.Visibility = ViewStates.Visible;
                 }
                 else
                 {
-                    imageView.Visibility = ViewStates.Invisible;
+                    _imageView.Visibility = ViewStates.Invisible;
                 }
             };
-            imageView = FindViewById<ImageView>(Resource.Id.imageView);
+            _imageView = FindViewById<ImageView>(Resource.Id.imageView);
             var cameraCaptureButton = FindViewById<Button>(Resource.Id.camera_capture_button);
 
             // Request camera permissions   
@@ -135,7 +134,7 @@ namespace CameraX
         private void StartCamera()
         {
             var cameraProviderFuture = ProcessCameraProvider.GetInstance(this);
-
+            
             cameraProviderFuture.AddListener(new Runnable(() =>
             {
                 // Used to bind the lifecycle of cameras to the lifecycle owner
@@ -144,9 +143,9 @@ namespace CameraX
                 // Preview
                 var preview = new Preview.Builder().Build();
                 preview.SetSurfaceProvider(_viewFinder.CreateSurfaceProvider());
-
+                
                 // Take Photo
-                this._imageCapture = new ImageCapture.Builder().Build();
+                _imageCapture = new ImageCapture.Builder().Build();
 
                 // Frame by frame analyze
                 var imageAnalyzer = new ImageAnalysis.Builder()
@@ -155,56 +154,38 @@ namespace CameraX
 
                 imageAnalyzer.SetAnalyzer(_cameraExecutor, new DocumentAnalyzer(imageProxy =>
                 {
-                    long currentTimestamp = JavaSystem.CurrentTimeMillis();
-                    frameCount++;
-
-                    if (currentTimestamp - lastTimestamp >= 1000) // Calculate FPS every second
+                    if (!_pauseAnalysis)
                     {
-                        fps = frameCount / ((currentTimestamp - lastTimestamp) / 1000.0);
-                        frameCount = 0;
-                        lastTimestamp = currentTimestamp;
-                        Log.Debug("Debug", $"Current FPS data: {fps}");
+                        long currentTimestamp = JavaSystem.CurrentTimeMillis();
+                        FrameCount++;
+
+                        if (currentTimestamp - LastTimestamp >= 1000) // Calculate FPS every second
+                        {
+                            Fps = FrameCount / ((currentTimestamp - LastTimestamp) / 1000.0);
+                            FrameCount = 0;
+                            LastTimestamp = currentTimestamp;
+                            Log.Debug("Debug", $"Current FPS data: {Fps}");
+                        }
+
+                        var image = imageProxy.Image;
+                        _height = image.Height;
+                        _width = image.Width;
+                        // Get the dimensions of the PreviewView
+                        
+                        var bitmap = OpenCvHelper(image);
+                        imageProxy.Close();
+
+                        //bitmap = TransformImage(bitmap, _viewFinder.Width, _viewFinder.Height);
+                        RunOnUiThread(() =>
+                        {
+                            _imageView.SetImageBitmap(bitmap);
+                            UpdateFps(Fps);
+                        });
                     }
-                    
-                    var image = imageProxy.Image;
-                    height = image.Height;
-                    width = image.Width;
-                    ByteBuffer imageData = image.GetPlanes()[0].Buffer;
-                    var bitmap = OpenCVHelper(imageData);
-                    
-                    // Calculate the aspect ratio of the original processedBitmap
-                    float aspectRatio = (float)bitmap.Width / (float)bitmap.Height;
-
-                    // Get the dimensions of the PreviewView
-                    int previewWidth = _viewFinder.Width;
-                    int previewHeight = _viewFinder.Height;
-                    
-                    imageProxy.Close();
-                    
-                    // Calculate the new dimensions for the scaled image while maintaining the aspect ratio
-                    int newWidth, newHeight;
-                    if (aspectRatio > 1) {
-                        // Landscape orientation
-                        newWidth = previewWidth;
-                        newHeight = (int)(previewWidth / aspectRatio);
-                    } 
-                    else 
+                    else
                     {
-                        // Portrait orientation or square
-                        newHeight = previewHeight ;
-                        newWidth = (int)(previewHeight * aspectRatio);
+                        imageProxy.Close();
                     }
-
-                    //bitmap = ZoomInBitmap(bitmap, previewWidth, previewHeight);
-
-                    // Create a scaled bitmap using the new dimensions
-                    Bitmap scaledBitmap = Bitmap.CreateScaledBitmap(bitmap, newWidth, newHeight, true);
-                    //scaledBitmap = Bitmap.CreateScaledBitmap(scaledBitmap, previewWidth, previewHeight, false);
-                    RunOnUiThread(() =>
-                    {
-                        imageView.SetImageBitmap(scaledBitmap);
-                        UpdateFPS(fps);
-                    });
                 }));
                 
                 // Select back camera as a default, or front camera otherwise
@@ -233,71 +214,111 @@ namespace CameraX
 
             }), ContextCompat.GetMainExecutor(this)); //GetMainExecutor: returns an Executor that runs on the main thread.
         }
-        private void UpdateFPS(double fps)
+
+        private static Bitmap TransformImage(Bitmap bitmap, int previewWidth, int previewHeight)
         {
-            fpsTextView.Text = $"FPS: {fps:F2}";
+            // Calculate the aspect ratio of the original processedBitmap
+            float aspectRatio = (float)bitmap.Width / (float)bitmap.Height;
+
+            // Calculate the new dimensions for the scaled image while maintaining the aspect ratio
+            int newWidth, newHeight;
+            if (aspectRatio > 1)
+            {
+                // Landscape orientation
+                newWidth = previewWidth;
+                newHeight = (int)(previewWidth / aspectRatio);
+            }
+            else
+            {
+                // Portrait orientation or square
+                newHeight = previewHeight;
+                newWidth = (int)(previewHeight * aspectRatio);
+            }
+
+            // Create a scaled bitmap using the new dimensions
+            return Bitmap.CreateScaledBitmap(bitmap, newWidth, newHeight, true);
         }
-        public long lastTimestamp { get; set; } = 0;
 
-        public int frameCount { get; set; } = 0;
-
-        public double fps { get; set; } = 0;
-        
-        public Bitmap ZoomInBitmap(Bitmap bitmap, int targetWidth, int targetHeight)
+        private void UpdateFps(double fps)
         {
-            // Calculate the scaling factors for width and height
-            float scaleX = (float)bitmap.Width / targetWidth;
-            float scaleY = (float)bitmap.Height / targetHeight;
-
-            // Calculate the scaling factor that maintains the aspect ratio
-            float scaleFactor = Math.Max(scaleX, scaleY);
-
-            // Calculate the dimensions of the cropped image
-            int scaledWidth = (int)(bitmap.Width / scaleFactor);
-            int scaledHeight = (int)(bitmap.Height / scaleFactor);
-
-            // Ensure that the scaled dimensions are not larger than the original dimensions
-            scaledWidth = Math.Min(scaledWidth, bitmap.Width);
-            scaledHeight = Math.Min(scaledHeight, bitmap.Height);
-
-            // Calculate the cropping coordinates
-            int left = Math.Max((bitmap.Width - scaledWidth) / 2, 0);
-            int top = Math.Max((bitmap.Height - scaledHeight) / 2, 0);
-            int right = Math.Min(left + scaledWidth, bitmap.Width);
-            int bottom = Math.Min(top + scaledHeight, bitmap.Height);
-
-            // Create a cropped bitmap
-            Bitmap croppedBitmap = Bitmap.CreateBitmap(bitmap, left, top, right - left, bottom - top);
-
-            return croppedBitmap;
+            _fpsTextView.Text = $"FPS: {fps:F2}";
         }
-        
-        private Bitmap OpenCVHelper(ByteBuffer imageData)
-        {
-            var filteredMat = cannyImageDetector.Update(imageData, height, width);
 
-            var originalOrientation = 0;
+        private long LastTimestamp { get; set; } = 0;
+
+        private int FrameCount { get; set; } = 0;
+
+        private double Fps { get; set; } = 0;
+        
+        
+        private Bitmap OpenCvHelper(Image image)
+        {
+            var colorMat = ConvertImageToMat(image);
+            var filteredMat = _cannyImageDetector.Update(colorMat);
+
+            if (_captureClicked)
+            {
+                _pauseAnalysis = true;
+                Mat tempMat = _cannyImageDetector.CropImage();
+                if (tempMat != null)
+                {
+                    filteredMat = tempMat;
+                }
+            }
 
             var bitmapFiltered = 
                 Bitmap.CreateBitmap(
-                    width, height,
+                    filteredMat.Width(), filteredMat.Height(),
                     Bitmap.Config.Argb8888
                 );
-
-             Utils.MatToBitmap(filteredMat, bitmapFiltered);
-             
+            
+            //if our bounding box is unstable, we can get an exception here
+            try
+            {
+                Utils.MatToBitmap(filteredMat, bitmapFiltered);
+            }
+            catch (Exception e)
+            {
+                _pauseAnalysis = false;
+                _captureClicked = false;
+                Console.WriteLine(e);
+            }
+            
              // Apply the original orientation transformation to the bitmap
              Matrix matrix = new Matrix();
              matrix.PostRotate(90);
-
+             
              Bitmap rotatedBitmap = Bitmap.CreateBitmap(bitmapFiltered, 0, 0, filteredMat.Width(), filteredMat.Height(), matrix, true);
              
              return rotatedBitmap;
-             //var boundingBox = new OverlayGenerator(imageProxy);
-             // _viewFinder.Overlay?.Clear();
-             // _viewFinder.Overlay?.Add(boundingBox);
         }
         
+        private Mat ConvertImageToMat(Image oImage)
+        {
+            var image = oImage;
+
+            var yBuffer = image.GetPlanes()[0].Buffer;
+            var yImageDataArray = new byte[yBuffer.Remaining()];
+            yBuffer.Get(yImageDataArray);
+
+            var uBuffer = image.GetPlanes()[1].Buffer;
+            var uImageDataArray = new byte[uBuffer.Remaining()];
+            uBuffer.Get(uImageDataArray);
+
+            var vBuffer = image.GetPlanes()[2].Buffer;
+            var vImageDataArray = new byte[vBuffer.Remaining()];
+            vBuffer.Get(vImageDataArray);
+            
+            var yuvMat = new Mat(image.Height + image.Height / 2, image.Width, CvType.Cv8uc1);
+            yuvMat.Put(0, 0, yImageDataArray);
+            yuvMat.Put(image.Height, 0, uImageDataArray);
+            yuvMat.Put(image.Height + image.Height / 4, 0, vImageDataArray);
+
+            var rgbMat = new Mat();
+            Imgproc.CvtColor(yuvMat, rgbMat, Imgproc.ColorYuv2bgraI420);
+
+            return rgbMat;
+        }
         protected override void OnResume()
         {
             base.OnResume();
@@ -314,8 +335,15 @@ namespace CameraX
         }
         private void TakePhoto()
         {
+            if (_captureClicked)
+            {
+                _captureClicked = false;
+                _pauseAnalysis = false;
+            }
+            else _captureClicked = true;
+            return;
             // Get a stable reference of the modifiable image capture use case   
-            var imageCapture = this._imageCapture;
+            var imageCapture = _imageCapture;
             if (imageCapture == null)
                 return;
 
