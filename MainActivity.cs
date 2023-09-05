@@ -172,7 +172,7 @@ namespace CameraX
                         _width = image.Width;
                         // Get the dimensions of the PreviewView
                         
-                        var bitmap = OpenCvHelper(image);
+                        var bitmap = OpenCvHelper(image, imageProxy);
                         imageProxy.Close();
 
                         //bitmap = TransformImage(bitmap, _viewFinder.Width, _viewFinder.Height);
@@ -250,10 +250,12 @@ namespace CameraX
 
         private double Fps { get; set; } = 0;
         
-        
-        private Bitmap OpenCvHelper(Image image)
+        //TODO - 1) Move Image To Mat Converter logic to DocumentAnalyzer class
+        //TODO - 2) Instead of using frame capture for final crop, use TakePicture pipeline      
+        private Bitmap OpenCvHelper(Image image, IImageProxy imageProxy)
         {
             var colorMat = ConvertImageToMat(image);
+            imageProxy.Close();
             var filteredMat = _cannyImageDetector.Update(colorMat);
 
             if (_captureClicked)

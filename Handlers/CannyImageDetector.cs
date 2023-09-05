@@ -46,11 +46,58 @@ namespace CameraX.Handlers
                 throw;
             }
             
+            var largestContour = PrepareImage(width, height, out var yellowColor, out var canvas);
+
+            if (largestContour != null)
+            {
+                ContourHelper(largestContour, canvas, yellowColor);
+            }
+            return canvas; // Return the canvas with the bounding boxes overlaid
+        }
+
+        private static void ContourHelper(MatOfPoint largestContour, Mat canvas, Scalar yellowColor)
+        {
+            // Convert MatOfPoint to MatOfPoint2f for ApproxPolyDP
+            var corners2f = new MatOfPoint2f(largestContour.ToArray());
+
+            // Approximate the contour
+            var epsilon = 0.1 * Imgproc.ArcLength(corners2f, true);
+            _corners = new MatOfPoint2f();
+            Imgproc.ApproxPolyDP(corners2f, _corners, epsilon, true);
+
+            // If our approximated contour has four points
+            if (_corners.Rows() == 4)
+            {
+                var approx = new MatOfPoint();
+                _corners.ConvertTo(approx, 4);
+
+                Imgproc.DrawContours(canvas, new JavaList<MatOfPoint> { approx }, -1, yellowColor, 1);
+
+                _contour = approx;
+                // Sorting the corners and converting them to desired shape
+                _cornersArray = approx.ToArray();
+                Array.Sort(_cornersArray, (p1, p2) => p1.X.CompareTo(p2.X));
+
+                // Displaying the corners - Enable for development/perspective transform
+                
+                // Draw the contour and corners on the canvas
+                //Imgproc.DrawContours(canvas, new JavaList<MatOfPoint> { largestContour }, -1, new Scalar(255, 0, 0), 1);
+                // for (var index = 0; index < _cornersArray.Length; index++)
+                // {
+                //     var character = ((char)(65 + index)).ToString();
+                //     Imgproc.PutText(canvas, character, _cornersArray[index], Imgproc.FontHersheySimplex, 0.5,
+                //         new Scalar(0, 255, 0), 1, Imgproc.LineAa);
+                // }
+            }
+        }
+
+        private static MatOfPoint PrepareImage(int width, int height, out Scalar yellowColor, out Mat canvas)
+        {
             var blurredMat = new Mat();
             Imgproc.GaussianBlur(_mat, blurredMat, new OpenCV.Core.Size(11, 11), 0, 0);
 
             var edges = new Mat();
-            Imgproc.Canny(blurredMat, edges, 30, 90);
+            Imgproc.Canny(blurredMat, edges, 20, 60);
             Imgproc.Dilate(edges, edges,
                 Imgproc.GetStructuringElement(Imgproc.MorphEllipse, new OpenCV.Core.Size(5, 5)));
 
@@ -63,46 +110,12 @@ namespace CameraX.Handlers
 
             // Create a black canvas to draw the contour
             var blackColor = new Scalar(0, 0, 0);
-            var yellowColor = new Scalar(255, 255, 0);
+            yellowColor = new Scalar(255, 255, 0);
 
-            var canvas = new Mat(new OpenCV.Core.Size(width, height), 24, blackColor);
-
-            if (largestContour != null)
-            {
-                // Convert MatOfPoint to MatOfPoint2f for ApproxPolyDP
-                var corners2f = new MatOfPoint2f(largestContour.ToArray());
-
-                // Approximate the contour
-                var epsilon = 0.1 * Imgproc.ArcLength(corners2f, true);
-                _corners = new MatOfPoint2f();
-                Imgproc.ApproxPolyDP(corners2f, _corners, epsilon, true);
-
-                // If our approximated contour has four points
-                if (_corners.Rows() == 4)
-                {
-                    var approx = new MatOfPoint();
-                    _corners.ConvertTo(approx, 4);
-                    // Draw the contour and corners on the canvas
-                    //Imgproc.DrawContours(canvas, new JavaList<MatOfPoint> { largestContour }, -1, new Scalar(255, 0, 0), 1);
-                    Imgproc.DrawContours(canvas, new JavaList<MatOfPoint> { approx }, -1, yellowColor, 3);
-
-                    _contour = approx;
-                    // Sorting the corners and converting them to desired shape
-                    _cornersArray = approx.ToArray();
-                    Array.Sort(_cornersArray, (p1, p2) => p1.X.CompareTo(p2.X));
-
-                    // Displaying the corners
-                    // for (var index = 0; index < _cornersArray.Length; index++)
-                    // {
-                    //     var character = ((char)(65 + index)).ToString();
-                    //     Imgproc.PutText(canvas, character, _cornersArray[index], Imgproc.FontHersheySimplex, 0.5,
-                    //         new Scalar(0, 255, 0), 1, Imgproc.LineAa);
-                    // }
-                }
-            }
-            return canvas; // Return the canvas with the bounding boxes overlaid
+            canvas = new Mat(new OpenCV.Core.Size(width, height), 24, blackColor);
+            return largestContour;
         }
-        
+
         public Mat CropImage()
         {
             // If our approximated contour has four points

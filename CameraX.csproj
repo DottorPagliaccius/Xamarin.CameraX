@@ -76,7 +76,6 @@
     <Compile Include="Handlers\CannyImageDetector.cs" />
     <Compile Include="Handlers\DocumentAnalyzer.cs" />
     <Compile Include="Handlers\ImageSaveCallback.cs" />
-    <Compile Include="Handlers\LuminosityAnalyzer.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Handlers\OnClickListener.cs" />
     <Compile Include="Resources\Resource.designer.cs" />
@@ -114,6 +113,7 @@
     <AndroidResource Include="Resources\mipmap-xxxhdpi\ic_launcher_round.png" />
   </ItemGroup>
   <ItemGroup>
+    <Folder Include="obj\Debug\android\assets\" />
     <Folder Include="Resources\drawable\" />
   </ItemGroup>
   <ItemGroup>
