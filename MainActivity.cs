@@ -21,7 +21,6 @@ using Android.Opengl;
 using Android.Views;
 using AndroidX.AppCompat.Widget;
 using CameraX.Handlers;
-using Emgu.CV.Util;
 using Java.Nio;
 using Lennox.LibYuvSharp;
 using OpenCV.Android;
@@ -44,23 +43,20 @@ namespace CameraX
         private const string Tag = "CameraXBasic";
         private const int RequestCodePermissions = 10;
         private const string FilenameFormat = "yyyy-MM-dd-HH-mm-ss-SSS";
-        private Bitmap _bitmapBuffer;
         private bool _pauseAnalysis = false;
-        private int _imageRotationDegrees = 0;
         private BaseLoaderCallback _callback;
         private int _width;
         private int _height;
         private bool _captureClicked;
 
         private CannyImageDetector _cannyImageDetector = new CannyImageDetector();
-        ImageCapture _imageCapture;
-        File _outputDirectory;
-        IExecutorService _cameraExecutor;
-        VectorOfPoint _contourCoordinates;
-        ImageView _imageView;
-        PreviewView _viewFinder;
-        SwitchCompat _cannySwitch;
-        TextView _fpsTextView;
+        private ImageCapture _imageCapture;
+        private File _outputDirectory;
+        private IExecutorService _cameraExecutor;
+        private ImageView _imageView;
+        private PreviewView _viewFinder;
+        private SwitchCompat _cannySwitch;
+        private TextView _fpsTextView;
         
 
         protected override void OnCreate(Bundle savedInstanceState)
