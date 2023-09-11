@@ -1,6 +1,7 @@
 using System;
 using System.Drawing;
 using System.Drawing.Imaging;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using Android.Graphics;
 using Android.Util;
@@ -17,6 +18,7 @@ namespace CameraX.Handlers
     public class DocumentAnalyzer: Java.Lang.Object, ImageAnalysis.IAnalyzer
     {
         private readonly Action<IImageProxy> docListener;
+        public Matrix TransformMatrix;
 
         public DocumentAnalyzer(Action<IImageProxy> callback) //LumaListener listener)
         {
@@ -27,6 +29,10 @@ namespace CameraX.Handlers
         {
             docListener.Invoke(imageProxy);
         }
-        
+
+        public void UpdateTransform(Matrix matrix)
+        {
+            TransformMatrix = matrix;
+        }
     }
 }

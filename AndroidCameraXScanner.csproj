@@ -75,7 +75,9 @@
   <ItemGroup>
     <Compile Include="Handlers\CannyImageDetector.cs" />
     <Compile Include="Handlers\DocumentAnalyzer.cs" />
+    <Compile Include="Handlers\ImageCapturedCallback.cs" />
     <Compile Include="Handlers\ImageSaveCallback.cs" />
+    <Compile Include="Handlers\YuvToRgbHelper.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Handlers\OnClickListener.cs" />
     <Compile Include="Resources\Resource.designer.cs" />

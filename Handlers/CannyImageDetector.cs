@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Runtime.InteropServices;
 using Android.Graphics;
@@ -38,7 +39,7 @@ namespace CameraX.Handlers
             
             try
             {
-                Imgproc.CvtColor(oMat, _mat, Imgproc.ColorRgba2gray);
+                Imgproc.CvtColor(oMat, _mat, Imgproc.ColorBgra2gray);
             }
             catch (Exception e)
             {
@@ -97,7 +98,7 @@ namespace CameraX.Handlers
             Imgproc.GaussianBlur(_mat, blurredMat, new OpenCV.Core.Size(11, 11), 0, 0);
 
             var edges = new Mat();
-            Imgproc.Canny(blurredMat, edges, 20, 60);
+            Imgproc.Canny(blurredMat, edges, 30, 90);
             Imgproc.Dilate(edges, edges,
                 Imgproc.GetStructuringElement(Imgproc.MorphEllipse, new OpenCV.Core.Size(5, 5)));
 
@@ -121,21 +122,12 @@ namespace CameraX.Handlers
             // If our approximated contour has four points
             if (_corners.Rows() == 4)
             {
-                try
-                {
-                    Imgproc.CvtColor(_colorMat, _colorMat, Imgproc.ColorBgra2rgba);
-                }
-                catch (Exception e)
-                {
-                    Console.WriteLine(e);
-                    throw;
-                }
                 
                 // Calculate the bounding rectangle of the largest contour
                 Rect boundingRect = Imgproc.BoundingRect(_contour);
 
-                // Create an output Mat with an alpha channel (RGBA)
-                var result = new Mat(_colorMat.Size(), CvType.Cv8uc4);
+                // Create an output Mat without an Alpha channel - identical type to _colorMat (BGR)
+                var result = new Mat(_colorMat.Size(), CvType.Cv8uc3);
 
                 // Fill the entire result Mat with black color (0, 0, 0, 255)
                 result.SetTo(new Scalar(0, 0, 0, 255));
@@ -149,13 +141,26 @@ namespace CameraX.Handlers
 
             return null;
         }
-        
+
+        public Rect GetCroppingBoundingBox()
+        {
+            // If our approximated contour has four points
+            if (_corners.Rows() == 4)
+            {
+                // Calculate the bounding rectangle of the largest contour
+                return Imgproc.BoundingRect(_contour);
+            }
+            
+            return null;
+        }
+
         //Tabling this for now
         //Need to find a way to get the coordinates to be ordered correctly
         //I think the issue might be due to the 90 degree rotation mismatch
         //Trying different combinations of dstPoints helps but the best result i've gotten so far
         //is a cropped in image of the rectangle contour data.
         //May need to try rearranging with the Y and X flipped to account for the 90 degree rotation
+        [Obsolete]
         public Bitmap PerformPerspectiveTransform(Bitmap inputImage)
         {
             Point[] srcPoints = _cornersArray;
@@ -217,6 +222,7 @@ namespace CameraX.Handlers
             }
         }
 
+        [Obsolete] //Not implemented fully
         private static float[,] OrderPoints(float[,] pts)
         {
             // Rearrange coordinates to order: top-left, top-right, bottom-right, bottom-left
@@ -272,6 +278,7 @@ namespace CameraX.Handlers
             return rect;
         }
 
+        [Obsolete] //Not implemented fully
         private static int GetIndexOfMinDiff(float[,] diff)
         {
             float minValue = float.MaxValue;
@@ -294,7 +301,8 @@ namespace CameraX.Handlers
 
             return minIndex;
         }
-
+        
+        [Obsolete] //Not implemented fully
         private static int GetIndexOfMaxDiff(float[,] diff)
         {
             float maxValue = float.MinValue;
@@ -317,7 +325,8 @@ namespace CameraX.Handlers
 
             return maxIndex;
         }
-
+        
+        [Obsolete] //Not implemented fully
         private int Vector2Compare(Point value1, Point value2)
         {
             // NOTE: THESE DEPEND ON HOW YOU EVALUATE TOP/LEFT/RIGHT/BOTTOM,
@@ -346,9 +355,9 @@ namespace CameraX.Handlers
                 return 1;
             }
         }
-        
     }
 
+    [Obsolete] //Not implemented fully
     public static class PointExtensions
     {
         public static double DistanceFrom(this Point point, Point srcPoint)

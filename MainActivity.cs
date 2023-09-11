@@ -1,4 +1,6 @@
-﻿using Android;
+﻿using System.Drawing;
+using System.IO;
+using Android;
 using Android.App;
 using Android.OS;
 using Android.Runtime;
@@ -10,24 +12,22 @@ using AndroidX.Camera.Lifecycle;
 using AndroidX.Camera.View;
 using AndroidX.Core.App;
 using AndroidX.Core.Content;
-using Java.IO;
 using Java.Lang;
 using Java.Util;
 using Java.Util.Concurrent;
 using System.Linq;
 using Android.Graphics;
-using Android.Media;
-using Android.Opengl;
 using Android.Views;
 using AndroidX.AppCompat.Widget;
 using CameraX.Handlers;
 using Java.Nio;
-using Lennox.LibYuvSharp;
 using OpenCV.Android;
 using OpenCV.Core;
-using OpenCV.ImgCodecs;
 using OpenCV.ImgProc;
+using Bitmap = Android.Graphics.Bitmap;
 using Console = System.Console;
+using File = Java.IO.File;
+using Image = Android.Media.Image;
 using Mat = OpenCV.Core.Mat;
 using Matrix = Android.Graphics.Matrix;
 
@@ -48,6 +48,7 @@ namespace CameraX
         private int _width;
         private int _height;
         private bool _captureClicked;
+        private Bitmap _croppedImage;
 
         private CannyImageDetector _cannyImageDetector = new CannyImageDetector();
         private ImageCapture _imageCapture;
@@ -68,18 +69,6 @@ namespace CameraX
 
             _viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
             _fpsTextView = FindViewById<TextView>(Resource.Id.fpsTextView);
-            _cannySwitch = FindViewById<SwitchCompat>(Resource.Id.cannySwitch);
-            _cannySwitch.CheckedChange += (sender, e) =>
-            {
-                if (e.IsChecked)
-                {
-                    _imageView.Visibility = ViewStates.Visible;
-                }
-                else
-                {
-                    _imageView.Visibility = ViewStates.Invisible;
-                }
-            };
             _imageView = FindViewById<ImageView>(Resource.Id.imageView);
             var cameraCaptureButton = FindViewById<Button>(Resource.Id.camera_capture_button);
 
@@ -146,12 +135,18 @@ namespace CameraX
                 // Frame by frame analyze
                 var imageAnalyzer = new ImageAnalysis.Builder()
                     .SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)
+                    .SetTargetAspectRatio(3)
                     .Build();
-
+                
                 imageAnalyzer.SetAnalyzer(_cameraExecutor, new DocumentAnalyzer(imageProxy =>
                 {
                     if (!_pauseAnalysis)
                     {
+                        // Get the dimensions of the PreviewView
+                        var image = imageProxy.Image;
+                        _height = image.Height;
+                        _width = image.Width;
+                        
                         long currentTimestamp = JavaSystem.CurrentTimeMillis();
                         FrameCount++;
 
@@ -162,19 +157,16 @@ namespace CameraX
                             LastTimestamp = currentTimestamp;
                             Log.Debug("Debug", $"Current FPS data: {Fps}");
                         }
-
-                        var image = imageProxy.Image;
-                        _height = image.Height;
-                        _width = image.Width;
-                        // Get the dimensions of the PreviewView
                         
                         var bitmap = OpenCvHelper(image, imageProxy);
                         imageProxy.Close();
-
                         //bitmap = TransformImage(bitmap, _viewFinder.Width, _viewFinder.Height);
                         RunOnUiThread(() =>
                         {
-                            _imageView.SetImageBitmap(bitmap);
+                            if (_captureClicked)
+                                _imageView.SetImageBitmap(_croppedImage);
+                            else 
+                                _imageView.SetImageBitmap(bitmap);
                             UpdateFps(Fps);
                         });
                     }
@@ -247,11 +239,12 @@ namespace CameraX
         private double Fps { get; set; } = 0;
         
         //TODO - 1) Move Image To Mat Converter logic to DocumentAnalyzer class
-        //TODO - 2) Instead of using frame capture for final crop, use TakePicture pipeline      
+        //TODO - 2) Create A Seperate Image View Plane since the bounding boxes need to be scaled and cropped but the final image needs to only be fit center    
         private Bitmap OpenCvHelper(Image image, IImageProxy imageProxy)
         {
-            var colorMat = ConvertImageToMat(image);
+            var colorMat = YuvToRgb(image);
             imageProxy.Close();
+            //var filteredMat = colorMat;
             var filteredMat = _cannyImageDetector.Update(colorMat);
 
             if (_captureClicked)
@@ -291,32 +284,54 @@ namespace CameraX
              return rotatedBitmap;
         }
         
-        private Mat ConvertImageToMat(Image oImage)
+        private Mat YuvToRgb(Image oImage)
         {
-            var image = oImage;
+            try
+            {
+                var image = oImage;
+                if (image != null)
+                {
+                    byte[] nv21;
+                    ByteBuffer yBuffer = image.GetPlanes()[0].Buffer;
+                    ByteBuffer uBuffer = image.GetPlanes()[1].Buffer;
+                    ByteBuffer vBuffer = image.GetPlanes()[2].Buffer;
+                    
+                    var yRowStride = image.GetPlanes()[0].RowStride;
+                    var uRowStride = image.GetPlanes()[1].RowStride;
+                    var vRowStride = image.GetPlanes()[2].RowStride;
 
-            var yBuffer = image.GetPlanes()[0].Buffer;
-            var yImageDataArray = new byte[yBuffer.Remaining()];
-            yBuffer.Get(yImageDataArray);
+                    int ySize = yRowStride * image.Height;
+                    var uSize = uRowStride * (image.Height / 2); // Height is halved for U and V
+                    var vSize = vRowStride * (image.Height / 2);
 
-            var uBuffer = image.GetPlanes()[1].Buffer;
-            var uImageDataArray = new byte[uBuffer.Remaining()];
-            uBuffer.Get(uImageDataArray);
+                    nv21 = new byte[ySize + uSize + vSize];
 
-            var vBuffer = image.GetPlanes()[2].Buffer;
-            var vImageDataArray = new byte[vBuffer.Remaining()];
-            vBuffer.Get(vImageDataArray);
-            
-            var yuvMat = new Mat(image.Height + image.Height / 2, image.Width, CvType.Cv8uc1);
-            yuvMat.Put(0, 0, yImageDataArray);
-            yuvMat.Put(image.Height, 0, uImageDataArray);
-            yuvMat.Put(image.Height + image.Height / 4, 0, vImageDataArray);
+                    // U and V are swapped
+                    yBuffer.Get(nv21, 0, ySize);
+                    vBuffer.Get(nv21, ySize, vSize);
+                    uBuffer.Get(nv21, ySize + vSize, uSize);
 
-            var rgbMat = new Mat();
-            Imgproc.CvtColor(yuvMat, rgbMat, Imgproc.ColorYuv2bgraI420);
+                    Mat mBGRA = GetYUV2Mat(nv21, image);
+                    return mBGRA;
+                }
+            }
+            catch (Exception e)
+            {
+                Log.Warn("Warning", e.Message);
+            }
 
-            return rgbMat;
+            return new Mat();
         }
+
+        private Mat GetYUV2Mat(byte[] data, Image image)
+        {
+            Mat mYuv = new Mat(image.Height + image.Height / 2, image.Width, CvType.Cv8uc1);
+            mYuv.Put(0, 0, data);
+            Mat mRGB = new Mat();
+            Imgproc.CvtColor(mYuv, mRGB, Imgproc.ColorYuv2bgraI420, 3);
+            return mRGB;
+        }
+        
         protected override void OnResume()
         {
             base.OnResume();
@@ -339,7 +354,7 @@ namespace CameraX
                 _pauseAnalysis = false;
             }
             else _captureClicked = true;
-            return;
+
             // Get a stable reference of the modifiable image capture use case   
             var imageCapture = _imageCapture;
             if (imageCapture == null)
@@ -351,24 +366,76 @@ namespace CameraX
             // Create output options object which contains file + metadata
             var outputOptions = new ImageCapture.OutputFileOptions.Builder(photoFile).Build();
 
-            // Set up image capture listener, which is triggered after photo has been taken
-            imageCapture.TakePicture(outputOptions, ContextCompat.GetMainExecutor(this), new ImageSaveCallback(
-
+            //Access ImageCapture memory buffer
+            imageCapture.TakePicture(ContextCompat.GetMainExecutor(this), new ImageCapturedCallback(
+                
                 onErrorCallback: (exc) =>
                 {
                     var msg = $"Photo capture failed: {exc.Message}";
                     Log.Error(Tag, msg, exc);
                     Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
                 },
-
-                onImageSaveCallback: (output) =>
+                
+                onCapturedSuccessCallback: (output) =>
                 {
-                    var savedUri = output.SavedUri;
-                    var msg = $"Photo capture succeeded: {savedUri}";
-                    Log.Debug(Tag, msg);
-                    Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
+                    var boundingBox = _cannyImageDetector.GetCroppingBoundingBox();
+                    if (boundingBox != null)
+                    {
+                        // Get the original bitmap
+                        Bitmap originalBitmap = output;
+                        
+                        //Calculate scaling factor
+                        var heightScaling = output.Height / _height;
+                        var widthScaling = output.Width / _width;
+                        
+                        // Calculate the width and height of the bounding box
+                        int cropX = boundingBox.X * heightScaling;
+                        int cropY = boundingBox.Y * widthScaling;
+                        int cropWidth = boundingBox.Width * widthScaling;
+                        int cropHeight = boundingBox.Height * heightScaling;
+
+                        // Ensure that the cropping area is within the bounds of the original bitmap
+                        cropX = Math.Max(0, cropX);
+                        cropY = Math.Max(0, cropY);
+                        cropWidth = Math.Min(originalBitmap.Width - cropX, cropWidth);
+                        cropHeight = Math.Min(originalBitmap.Height - cropY, cropHeight);
+
+                        // Create a new bitmap with the dimensions of the bounding box
+                        Bitmap croppedBitmap = Bitmap.CreateBitmap(originalBitmap, cropX, cropY, cropWidth, cropHeight);
+                        _croppedImage = croppedBitmap;
+                        Matrix matrix = new Matrix();
+                        matrix.PostRotate(90); // Rotate by 90 degrees
+
+                        Bitmap rotatedBitmap = Bitmap.CreateBitmap(_croppedImage, 0, 0, _croppedImage.Width, _croppedImage.Height, matrix, true);
+    
+                        // Update the reference to the rotated bitmap
+                        _croppedImage = rotatedBitmap;
+                        
+                        //Implement logic to save picture within this method or use the imagesavedcallback
+                        // 'croppedBitmap' now contains the cropped portion of the original bitmap
+                    }
                 }
+                    
             ));
+            
+            // Set up image capture listener, which is triggered after photo has been taken
+            // imageCapture.TakePicture(outputOptions, ContextCompat.GetMainExecutor(this), new ImageSaveCallback(
+            //
+            //     onErrorCallback: (exc) =>
+            //     {
+            //         var msg = $"Photo capture failed: {exc.Message}";
+            //         Log.Error(Tag, msg, exc);
+            //         Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
+            //     },
+            //
+            //     onImageSaveCallback: (output) =>
+            //     {
+            //         var savedUri = output.SavedUri;
+            //         var msg = $"Photo capture succeeded: {savedUri}";
+            //         Log.Debug(Tag, msg);
+            //         Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
+            //     }
+            // ));
         }
 
         // Save photos to => /Pictures/CameraX/

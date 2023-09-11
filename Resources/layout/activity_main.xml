@@ -6,23 +6,11 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         tools:context=".MainActivity">
-   <androidx.appcompat.widget.SwitchCompat
-           android:id="@+id/cannySwitch"
-           android:layout_width="wrap_content"
-           android:layout_height="wrap_content"
-           android:background="@color/colorAccent"
-           android:textColor="@color/colorPrimaryDark"
-           android:elevation="5dp"
-           android:text="Canny Mode"
-           app:layout_constraintEnd_toEndOf="parent"
-           app:layout_constraintStart_toStartOf="parent"
-           app:layout_constraintTop_toTopOf="parent" />
-      
    <ImageView
               android:id="@+id/imageView"
               android:layout_height="match_parent"
               android:layout_width="match_parent"
-              android:scaleType="centerCrop"
+              android:scaleType="fitCenter"
               android:elevation="2dp"
               app:layout_constraintEnd_toEndOf="parent"
               app:layout_constraintStart_toStartOf="parent"
