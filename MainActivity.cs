@@ -55,8 +55,8 @@ namespace CameraX
         private File _outputDirectory;
         private IExecutorService _cameraExecutor;
         private ImageView _imageView;
+        private ImageView _croppedImageView;
         private PreviewView _viewFinder;
-        private SwitchCompat _cannySwitch;
         private TextView _fpsTextView;
         
 
@@ -70,6 +70,8 @@ namespace CameraX
             _viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
             _fpsTextView = FindViewById<TextView>(Resource.Id.fpsTextView);
             _imageView = FindViewById<ImageView>(Resource.Id.imageView);
+            _croppedImageView = FindViewById<ImageView>(Resource.Id.croppedImageView);
+            
             var cameraCaptureButton = FindViewById<Button>(Resource.Id.camera_capture_button);
 
             // Request camera permissions   
@@ -135,7 +137,6 @@ namespace CameraX
                 // Frame by frame analyze
                 var imageAnalyzer = new ImageAnalysis.Builder()
                     .SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)
-                    .SetTargetAspectRatio(3)
                     .Build();
                 
                 imageAnalyzer.SetAnalyzer(_cameraExecutor, new DocumentAnalyzer(imageProxy =>
@@ -164,9 +165,20 @@ namespace CameraX
                         RunOnUiThread(() =>
                         {
                             if (_captureClicked)
-                                _imageView.SetImageBitmap(_croppedImage);
-                            else 
+                            {
+                                _croppedImageView.Visibility = ViewStates.Visible;
+                                _imageView.Visibility = ViewStates.Invisible;
+                                _viewFinder.Visibility = ViewStates.Invisible;
+                                _croppedImageView.SetImageBitmap(_croppedImage);
+                            }
+                            else
+                            {
+                                _imageView.Visibility = ViewStates.Visible;
+                                _viewFinder.Visibility = ViewStates.Visible;
+                                _croppedImageView.Visibility = ViewStates.Invisible;
                                 _imageView.SetImageBitmap(bitmap);
+                            }
+
                             UpdateFps(Fps);
                         });
                     }
@@ -239,22 +251,16 @@ namespace CameraX
         private double Fps { get; set; } = 0;
         
         //TODO - 1) Move Image To Mat Converter logic to DocumentAnalyzer class
-        //TODO - 2) Create A Seperate Image View Plane since the bounding boxes need to be scaled and cropped but the final image needs to only be fit center    
         private Bitmap OpenCvHelper(Image image, IImageProxy imageProxy)
         {
-            var colorMat = YuvToRgb(image);
+            var oMat = ColorspaceConversionHelper.ImageToMat(image);
             imageProxy.Close();
-            //var filteredMat = colorMat;
-            var filteredMat = _cannyImageDetector.Update(colorMat);
+            //var filteredMat = oMat;
+            var filteredMat = _cannyImageDetector.Update(oMat);
 
             if (_captureClicked)
             {
                 _pauseAnalysis = true;
-                Mat tempMat = _cannyImageDetector.CropImage();
-                if (tempMat != null)
-                {
-                    filteredMat = tempMat;
-                }
             }
 
             var bitmapFiltered = 
@@ -282,54 +288,6 @@ namespace CameraX
              Bitmap rotatedBitmap = Bitmap.CreateBitmap(bitmapFiltered, 0, 0, filteredMat.Width(), filteredMat.Height(), matrix, true);
              
              return rotatedBitmap;
-        }
-        
-        private Mat YuvToRgb(Image oImage)
-        {
-            try
-            {
-                var image = oImage;
-                if (image != null)
-                {
-                    byte[] nv21;
-                    ByteBuffer yBuffer = image.GetPlanes()[0].Buffer;
-                    ByteBuffer uBuffer = image.GetPlanes()[1].Buffer;
-                    ByteBuffer vBuffer = image.GetPlanes()[2].Buffer;
-                    
-                    var yRowStride = image.GetPlanes()[0].RowStride;
-                    var uRowStride = image.GetPlanes()[1].RowStride;
-                    var vRowStride = image.GetPlanes()[2].RowStride;
-
-                    int ySize = yRowStride * image.Height;
-                    var uSize = uRowStride * (image.Height / 2); // Height is halved for U and V
-                    var vSize = vRowStride * (image.Height / 2);
-
-                    nv21 = new byte[ySize + uSize + vSize];
-
-                    // U and V are swapped
-                    yBuffer.Get(nv21, 0, ySize);
-                    vBuffer.Get(nv21, ySize, vSize);
-                    uBuffer.Get(nv21, ySize + vSize, uSize);
-
-                    Mat mBGRA = GetYUV2Mat(nv21, image);
-                    return mBGRA;
-                }
-            }
-            catch (Exception e)
-            {
-                Log.Warn("Warning", e.Message);
-            }
-
-            return new Mat();
-        }
-
-        private Mat GetYUV2Mat(byte[] data, Image image)
-        {
-            Mat mYuv = new Mat(image.Height + image.Height / 2, image.Width, CvType.Cv8uc1);
-            mYuv.Put(0, 0, data);
-            Mat mRGB = new Mat();
-            Imgproc.CvtColor(mYuv, mRGB, Imgproc.ColorYuv2bgraI420, 3);
-            return mRGB;
         }
         
         protected override void OnResume()
@@ -415,7 +373,6 @@ namespace CameraX
                         // 'croppedBitmap' now contains the cropped portion of the original bitmap
                     }
                 }
-                    
             ));
             
             // Set up image capture listener, which is triggered after photo has been taken

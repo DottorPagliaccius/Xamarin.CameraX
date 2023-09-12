@@ -77,7 +77,7 @@
     <Compile Include="Handlers\DocumentAnalyzer.cs" />
     <Compile Include="Handlers\ImageCapturedCallback.cs" />
     <Compile Include="Handlers\ImageSaveCallback.cs" />
-    <Compile Include="Handlers\YuvToRgbHelper.cs" />
+    <Compile Include="Handlers\ColorspaceConversionHelper.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Handlers\OnClickListener.cs" />
     <Compile Include="Resources\Resource.designer.cs" />
@@ -121,12 +121,6 @@
   <ItemGroup>
     <PackageReference Include="ColorHelper">
       <Version>1.8.1</Version>
-    </PackageReference>
-    <PackageReference Include="Emgu.CV">
-      <Version>4.7.0.5276</Version>
-    </PackageReference>
-    <PackageReference Include="Emgu.CV.runtime.xamarin.mini.android">
-      <Version>4.7.0.5276</Version>
     </PackageReference>
     <PackageReference Include="Lennox.LibYuvSharp">
       <Version>1.1.2</Version>

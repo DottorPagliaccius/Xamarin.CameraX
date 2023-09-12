@@ -1,17 +1,6 @@
 using System;
-using System.Drawing;
-using System.Drawing.Imaging;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Android.Graphics;
-using Android.Util;
 using AndroidX.Camera.Core;
-using Emgu.CV;
-using Emgu.CV.CvEnum;
-using Emgu.CV.Structure;
-using Emgu.CV.Util;
-using Java.Nio;
-using Java.Util.Logging;
 
 namespace CameraX.Handlers
 {

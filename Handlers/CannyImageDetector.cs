@@ -1,23 +1,13 @@
 using System;
-using System.Collections.Generic;
-using System.Diagnostics.Contracts;
 using System.Linq;
-using System.Runtime.InteropServices;
 using Android.Graphics;
-using Android.Media;
 using Android.Runtime;
-using AndroidX.Camera.Core.Impl;
-using Java.Nio;
 using OpenCV.Android;
 using OpenCV.Core;
-using OpenCV.ImgCodecs;
 using OpenCV.ImgProc;
 using OpenCV.Utils;
-using Buffer = System.Buffer;
 using Point = OpenCV.Core.Point;
-using Range = OpenCV.Core.Range;
 using Rect = OpenCV.Core.Rect;
-using Size = System.Drawing.Size;
 
 namespace CameraX.Handlers
 {
@@ -29,24 +19,26 @@ namespace CameraX.Handlers
         private static Mat _mat;
         private static Mat _colorMat;
 
-        public Mat Update(Mat oMat)
+        public Mat Update(Mat oMat, bool colorSpaceRequired = false)
         {
             var width = oMat.Width();
             var height = oMat.Height();
+            _mat = oMat;
+            if (colorSpaceRequired)
+            {
+                try
+                {
+                    _mat = new Mat(oMat.Rows(), oMat.Cols(), 0);
+                    _colorMat = oMat.Clone();
+                    Imgproc.CvtColor(oMat, _mat, Imgproc.ColorBgra2gray);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                    throw;
+                }
+            }
 
-            _mat = new Mat(oMat.Rows(), oMat.Cols(), 24);
-            _colorMat = oMat.Clone();
-            
-            try
-            {
-                Imgproc.CvtColor(oMat, _mat, Imgproc.ColorBgra2gray);
-            }
-            catch (Exception e)
-            {
-                Console.WriteLine(e);
-                throw;
-            }
-            
             var largestContour = PrepareImage(width, height, out var yellowColor, out var canvas);
 
             if (largestContour != null)
@@ -116,13 +108,12 @@ namespace CameraX.Handlers
             canvas = new Mat(new OpenCV.Core.Size(width, height), 24, blackColor);
             return largestContour;
         }
-
+        
         public Mat CropImage()
         {
             // If our approximated contour has four points
             if (_corners.Rows() == 4)
             {
-                
                 // Calculate the bounding rectangle of the largest contour
                 Rect boundingRect = Imgproc.BoundingRect(_contour);
 
