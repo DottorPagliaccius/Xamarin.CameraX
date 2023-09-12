@@ -25,7 +25,7 @@ namespace CameraX.Handlers
 
         public override void OnCaptureSuccess(IImageProxy image)
         {
-            var data = ImageUtil.ImageToJpegByteArray(image);
+            var data = ImageUtil.JpegImageToJpegByteArray(image);
             var imageBitmap = BitmapFactory.DecodeByteArray(data, 0, data.Length);
 
             onCapturedSuccessCallback?.Invoke(imageBitmap);

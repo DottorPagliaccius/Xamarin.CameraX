@@ -78,7 +78,6 @@ namespace CameraX.Handlers
             int lastRow = height - 1;
             int lastCol = width - 1;
             
-
             if (rowStride == width)
             {
                 buffer.Get(data, 0, rowStride * height);
@@ -122,7 +121,40 @@ namespace CameraX.Handlers
         
             return GetYUV2Mat(data, oImage, planes[0].RowStride * height);
         }
+        
+        public static Mat Rgba8888ToMat(Image oImage)
+        {
+            var buffer = oImage.GetPlanes()[0].Buffer;
+            int width = oImage.Width, height = oImage.Height;
+            
+            // Assuming you have a ByteBuffer named "buffer"
+            byte[] rgba8888Data = new byte[buffer.Remaining()]; // Create a byte array to hold the data
+            
+            // Get the byte data from the ByteBuffer
+            buffer.Get(rgba8888Data);
+            Mat mat = new Mat(height, width, CvType.Cv8uc4);
 
+            int offset = 0;
+            byte[] matData = new byte[width * height * 4]; // 4 channels (RGBA)
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    int rgbaOffset = y * width * 4 + x * 4;
+            
+                    // Copy RGBA values from rgba8888Data to Mat
+                    matData[offset++] = rgba8888Data[rgbaOffset + 2]; // Red channel
+                    matData[offset++] = rgba8888Data[rgbaOffset + 1]; // Green channel
+                    matData[offset++] = rgba8888Data[rgbaOffset];     // Blue channel
+                    matData[offset++] = rgba8888Data[rgbaOffset + 3]; // Alpha channel
+                }
+            }
+
+            mat.Put(0, 0, matData);
+            return mat;
+        }
+        
         public static Mat YuvToRgb(Image oImage)
         {
             try
@@ -172,7 +204,7 @@ namespace CameraX.Handlers
                 Mat mYuv = new Mat(image.Height , image.Width, CvType.Cv8uc1);
                 mYuv.Put(0, 0, data);
                 Mat mRGB = new Mat();
-                Imgproc.CvtColor(mYuv, mRGB, Imgproc.ColorYuv2bgraI420, 3);
+                Imgproc.CvtColor(mYuv, mRGB, Imgproc.ColorRgba2gray, 3);
                 return mRGB;
             }
             

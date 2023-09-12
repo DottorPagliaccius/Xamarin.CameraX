@@ -129,7 +129,7 @@ namespace CameraX
 
                 // Preview
                 var preview = new Preview.Builder().Build();
-                preview.SetSurfaceProvider(_viewFinder.CreateSurfaceProvider());
+                preview.SetSurfaceProvider(_viewFinder.SurfaceProvider);
                 
                 // Take Photo
                 _imageCapture = new ImageCapture.Builder().Build();
@@ -137,6 +137,7 @@ namespace CameraX
                 // Frame by frame analyze
                 var imageAnalyzer = new ImageAnalysis.Builder()
                     .SetBackpressureStrategy(ImageAnalysis.StrategyKeepOnlyLatest)
+                    .SetOutputImageFormat(ImageAnalysis.OutputImageFormatRgba8888)
                     .Build();
                 
                 imageAnalyzer.SetAnalyzer(_cameraExecutor, new DocumentAnalyzer(imageProxy =>
@@ -147,7 +148,8 @@ namespace CameraX
                         var image = imageProxy.Image;
                         _height = image.Height;
                         _width = image.Width;
-                        
+
+                        var format = image.Format;
                         long currentTimestamp = JavaSystem.CurrentTimeMillis();
                         FrameCount++;
 
@@ -253,7 +255,7 @@ namespace CameraX
         //TODO - 1) Move Image To Mat Converter logic to DocumentAnalyzer class
         private Bitmap OpenCvHelper(Image image, IImageProxy imageProxy)
         {
-            var oMat = ColorspaceConversionHelper.ImageToMat(image);
+            var oMat = ColorspaceConversionHelper.Rgba8888ToMat(image);
             imageProxy.Close();
             //var filteredMat = oMat;
             var filteredMat = _cannyImageDetector.Update(oMat);
