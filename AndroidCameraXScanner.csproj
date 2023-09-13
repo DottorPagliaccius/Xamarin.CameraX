@@ -73,11 +73,12 @@
     <Reference Include="System.Numerics.Vectors" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Handlers\CannyImageDetector.cs" />
+    <Compile Include="Detectors\CannyImageDetector.cs" />
     <Compile Include="Handlers\DocumentAnalyzer.cs" />
     <Compile Include="Handlers\ImageCapturedCallback.cs" />
     <Compile Include="Handlers\ImageSaveCallback.cs" />
-    <Compile Include="Handlers\ColorspaceConversionHelper.cs" />
+    <Compile Include="Helpers\ColorspaceConversionHelper.cs" />
+    <Compile Include="Helpers\ImageTransformationHelper.cs" />
     <Compile Include="MainActivity.cs" />
     <Compile Include="Handlers\OnClickListener.cs" />
     <Compile Include="Resources\Resource.designer.cs" />
@@ -119,12 +120,6 @@
     <Folder Include="Resources\drawable\" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="ColorHelper">
-      <Version>1.8.1</Version>
-    </PackageReference>
-    <PackageReference Include="Lennox.LibYuvSharp">
-      <Version>1.1.2</Version>
-    </PackageReference>
     <PackageReference Include="SkiaSharp.Views">
       <Version>2.88.3</Version>
     </PackageReference>

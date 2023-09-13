@@ -11,7 +11,7 @@ using Rect = OpenCV.Core.Rect;
 
 namespace CameraX.Handlers
 {
-    public class CannyImageDetector
+    public static class CannyImageDetector
     {
         private static Point[] _cornersArray;
         private static MatOfPoint2f _corners;
@@ -19,7 +19,7 @@ namespace CameraX.Handlers
         private static Mat _mat;
         private static Mat _colorMat;
 
-        public Mat Update(Mat oMat, bool colorSpaceRequired = false)
+        public static Mat Update(Mat oMat, bool colorSpaceRequired = false)
         {
             var width = oMat.Width();
             var height = oMat.Height();
@@ -109,7 +109,7 @@ namespace CameraX.Handlers
             return largestContour;
         }
         
-        public Mat CropImage()
+        public static Mat CropImage()
         {
             // If our approximated contour has four points
             if (_corners.Rows() == 4)
@@ -133,7 +133,7 @@ namespace CameraX.Handlers
             return null;
         }
 
-        public Rect GetCroppingBoundingBox()
+        public static Rect GetCroppingBoundingBox()
         {
             // If our approximated contour has four points
             if (_corners.Rows() == 4)
@@ -152,7 +152,7 @@ namespace CameraX.Handlers
         //is a cropped in image of the rectangle contour data.
         //May need to try rearranging with the Y and X flipped to account for the 90 degree rotation
         [Obsolete]
-        public Bitmap PerformPerspectiveTransform(Bitmap inputImage)
+        public static Bitmap PerformPerspectiveTransform(Bitmap inputImage)
         {
             Point[] srcPoints = _cornersArray;
             
@@ -318,7 +318,7 @@ namespace CameraX.Handlers
         }
         
         [Obsolete] //Not implemented fully
-        private int Vector2Compare(Point value1, Point value2)
+        private static int Vector2Compare(Point value1, Point value2)
         {
             // NOTE: THESE DEPEND ON HOW YOU EVALUATE TOP/LEFT/RIGHT/BOTTOM,
             // BUT ASSUMING X AND Y COORDINATES ARE ROTATED 90 DEGREES

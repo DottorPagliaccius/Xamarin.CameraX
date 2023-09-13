@@ -1,6 +1,4 @@
-﻿using System.Drawing;
-using System.IO;
-using Android;
+﻿using Android;
 using Android.App;
 using Android.OS;
 using Android.Runtime;
@@ -16,19 +14,14 @@ using Java.Lang;
 using Java.Util;
 using Java.Util.Concurrent;
 using System.Linq;
-using Android.Graphics;
 using Android.Views;
-using AndroidX.AppCompat.Widget;
 using CameraX.Handlers;
-using Java.Nio;
+using CameraX.Helpers;
 using OpenCV.Android;
-using OpenCV.Core;
-using OpenCV.ImgProc;
 using Bitmap = Android.Graphics.Bitmap;
 using Console = System.Console;
 using File = Java.IO.File;
 using Image = Android.Media.Image;
-using Mat = OpenCV.Core.Mat;
 using Matrix = Android.Graphics.Matrix;
 
 namespace CameraX
@@ -49,8 +42,8 @@ namespace CameraX
         private int _height;
         private bool _captureClicked;
         private Bitmap _croppedImage;
-
-        private CannyImageDetector _cannyImageDetector = new CannyImageDetector();
+        
+        private ICamera _processCameraProvider;
         private ImageCapture _imageCapture;
         private File _outputDirectory;
         private IExecutorService _cameraExecutor;
@@ -59,6 +52,15 @@ namespace CameraX
         private PreviewView _viewFinder;
         private TextView _fpsTextView;
         
+        private void UpdateFps(double fps)
+        {
+            _fpsTextView.Text = $"FPS: {fps:F2}";
+        }
+        private long LastTimestamp { get; set; } = 0;
+
+        private int FrameCount { get; set; } = 0;
+
+        private double Fps { get; set; } = 0;
 
         protected override void OnCreate(Bundle savedInstanceState)
         {
@@ -83,9 +85,10 @@ namespace CameraX
 
             // Set up the listener for take photo button
             cameraCaptureButton.SetOnClickListener(new OnClickListener(() => TakePhoto()));
-
+            // Set up the touch event handler for your Tap to Focus
+            _viewFinder.Touch += ViewFinderOnTouch;
+            
             _outputDirectory = GetOutputDirectory();
-
             _cameraExecutor = Executors.NewSingleThreadExecutor();
         }
 
@@ -95,6 +98,36 @@ namespace CameraX
             _cameraExecutor.Shutdown();
         }
 
+        private void ViewFinderOnTouch(object sender, View.TouchEventArgs e)
+        {
+            if (e.Event.Action == MotionEventActions.Down)
+            {
+                float x = e.Event.GetX();
+                float y = e.Event.GetY();
+
+                OnTouch(x, y);
+            }
+        }
+        
+        //Tap-to-Focus
+        private void OnTouch(float x, float y)
+        {
+            DisplayOrientedMeteringPointFactory factory = new DisplayOrientedMeteringPointFactory(
+                _viewFinder.Display,
+                _processCameraProvider.CameraInfo,
+                _viewFinder.Width,
+                _viewFinder.Height
+            );
+    
+            MeteringPoint meteringPoint = factory.CreatePoint(x, y);
+
+            // Prepare focus action to be triggered.
+            FocusMeteringAction action = new FocusMeteringAction.Builder(meteringPoint).Build();
+
+            // Execute focus action.
+            _processCameraProvider.CameraControl.StartFocusAndMetering(action);
+        }
+        
         public override void OnRequestPermissionsResult(int requestCode, string[] permissions, [GeneratedEnum] Android.Content.PM.Permission[] grantResults)
         {
             if (requestCode == RequestCodePermissions)
@@ -149,7 +182,6 @@ namespace CameraX
                         _height = image.Height;
                         _width = image.Width;
 
-                        var format = image.Format;
                         long currentTimestamp = JavaSystem.CurrentTimeMillis();
                         FrameCount++;
 
@@ -163,7 +195,7 @@ namespace CameraX
                         
                         var bitmap = OpenCvHelper(image, imageProxy);
                         imageProxy.Close();
-                        //bitmap = TransformImage(bitmap, _viewFinder.Width, _viewFinder.Height);
+     
                         RunOnUiThread(() =>
                         {
                             if (_captureClicked)
@@ -206,7 +238,7 @@ namespace CameraX
                     cameraProvider.UnbindAll();
 
                     // Bind use cases to camera
-                    cameraProvider.BindToLifecycle(this, cameraSelector, preview, _imageCapture, imageAnalyzer);
+                    _processCameraProvider = cameraProvider.BindToLifecycle(this, cameraSelector, preview, _imageCapture, imageAnalyzer);
                 }
                 catch (Exception exc)
                 {
@@ -217,48 +249,11 @@ namespace CameraX
             }), ContextCompat.GetMainExecutor(this)); //GetMainExecutor: returns an Executor that runs on the main thread.
         }
 
-        private static Bitmap TransformImage(Bitmap bitmap, int previewWidth, int previewHeight)
-        {
-            // Calculate the aspect ratio of the original processedBitmap
-            float aspectRatio = (float)bitmap.Width / (float)bitmap.Height;
-
-            // Calculate the new dimensions for the scaled image while maintaining the aspect ratio
-            int newWidth, newHeight;
-            if (aspectRatio > 1)
-            {
-                // Landscape orientation
-                newWidth = previewWidth;
-                newHeight = (int)(previewWidth / aspectRatio);
-            }
-            else
-            {
-                // Portrait orientation or square
-                newHeight = previewHeight;
-                newWidth = (int)(previewHeight * aspectRatio);
-            }
-
-            // Create a scaled bitmap using the new dimensions
-            return Bitmap.CreateScaledBitmap(bitmap, newWidth, newHeight, true);
-        }
-
-        private void UpdateFps(double fps)
-        {
-            _fpsTextView.Text = $"FPS: {fps:F2}";
-        }
-
-        private long LastTimestamp { get; set; } = 0;
-
-        private int FrameCount { get; set; } = 0;
-
-        private double Fps { get; set; } = 0;
-        
-        //TODO - 1) Move Image To Mat Converter logic to DocumentAnalyzer class
         private Bitmap OpenCvHelper(Image image, IImageProxy imageProxy)
         {
             var oMat = ColorspaceConversionHelper.Rgba8888ToMat(image);
             imageProxy.Close();
-            //var filteredMat = oMat;
-            var filteredMat = _cannyImageDetector.Update(oMat);
+            var filteredMat = CannyImageDetector.Update(oMat);
 
             if (_captureClicked)
             {
@@ -306,6 +301,11 @@ namespace CameraX
                 Log.Debug("CameraPreview", "OpenCV library found inside package. Using it!");
             }
         }
+        
+        //TODO - 1. Fine-tune cropping area offset
+        //TODO - 2. Give option to save final image
+        //TODO - 3. Make the button look nicer
+        //TODO - 4. Make sure original image metadata is preserved
         private void TakePhoto()
         {
             if (_captureClicked)
@@ -338,41 +338,11 @@ namespace CameraX
                 
                 onCapturedSuccessCallback: (output) =>
                 {
-                    var boundingBox = _cannyImageDetector.GetCroppingBoundingBox();
+                    var boundingBox = CannyImageDetector.GetCroppingBoundingBox();
                     if (boundingBox != null)
                     {
-                        // Get the original bitmap
-                        Bitmap originalBitmap = output;
-                        
-                        //Calculate scaling factor
-                        var heightScaling = output.Height / _height;
-                        var widthScaling = output.Width / _width;
-                        
-                        // Calculate the width and height of the bounding box
-                        int cropX = boundingBox.X * heightScaling;
-                        int cropY = boundingBox.Y * widthScaling;
-                        int cropWidth = boundingBox.Width * widthScaling;
-                        int cropHeight = boundingBox.Height * heightScaling;
-
-                        // Ensure that the cropping area is within the bounds of the original bitmap
-                        cropX = Math.Max(0, cropX);
-                        cropY = Math.Max(0, cropY);
-                        cropWidth = Math.Min(originalBitmap.Width - cropX, cropWidth);
-                        cropHeight = Math.Min(originalBitmap.Height - cropY, cropHeight);
-
-                        // Create a new bitmap with the dimensions of the bounding box
-                        Bitmap croppedBitmap = Bitmap.CreateBitmap(originalBitmap, cropX, cropY, cropWidth, cropHeight);
-                        _croppedImage = croppedBitmap;
-                        Matrix matrix = new Matrix();
-                        matrix.PostRotate(90); // Rotate by 90 degrees
-
-                        Bitmap rotatedBitmap = Bitmap.CreateBitmap(_croppedImage, 0, 0, _croppedImage.Width, _croppedImage.Height, matrix, true);
-    
-                        // Update the reference to the rotated bitmap
-                        _croppedImage = rotatedBitmap;
-                        
-                        //Implement logic to save picture within this method or use the imagesavedcallback
-                        // 'croppedBitmap' now contains the cropped portion of the original bitmap
+                        // 'croppedBitmap' now contains the∑ cropped portion of the original bitmap
+                        _croppedImage = ImageTransformationHelper.CropOutputImage(output, boundingBox, _height, _width);
                     }
                 }
             ));
