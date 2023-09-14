@@ -108,7 +108,21 @@ namespace CameraX.Handlers
             canvas = new Mat(new OpenCV.Core.Size(width, height), 24, blackColor);
             return largestContour;
         }
+
+        public static Rect GetCroppingBoundingBox()
+        {
+            // If our approximated contour has four points
+            if (_corners.Rows() == 4)
+            {
+                // Calculate the bounding rectangle of the largest contour
+                return Imgproc.BoundingRect(_contour);
+            }
+            
+            return null;
+        }
         
+                
+        [Obsolete]
         public static Mat CropImage()
         {
             // If our approximated contour has four points
@@ -130,18 +144,6 @@ namespace CameraX.Handlers
                 return result;
             }
 
-            return null;
-        }
-
-        public static Rect GetCroppingBoundingBox()
-        {
-            // If our approximated contour has four points
-            if (_corners.Rows() == 4)
-            {
-                // Calculate the bounding rectangle of the largest contour
-                return Imgproc.BoundingRect(_contour);
-            }
-            
             return null;
         }
 

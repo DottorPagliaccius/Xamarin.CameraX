@@ -24,7 +24,36 @@ namespace CameraX.Handlers
 
         public void OnImageSaved(OutputFileResults photoFile)
         {
-            this.onImageSaveCallback.Invoke(photoFile);
+            // Get the saved file path as a string
+            string savedFilePath = photoFile.SavedUri?.Path;
+
+            if (!string.IsNullOrEmpty(savedFilePath))
+            {
+                // If you want to append a timestamp to the filename:
+                savedFilePath = AppendTimestampToFileName(savedFilePath);
+
+                // Convert the string path to an Android.Net.Uri
+                Android.Net.Uri savedUri = Android.Net.Uri.FromFile(new Java.IO.File(savedFilePath));
+
+                // Invoke the callback with the modified Android.Net.Uri
+                this.onImageSaveCallback.Invoke(new OutputFileResults(savedUri));
+            }
+            else
+            {
+                // Handle the case where the saved file path is empty or null
+            }
+        }
+
+        private string AppendTimestampToFileName(string filePath)
+        {
+            string directory = System.IO.Path.GetDirectoryName(filePath);
+            string fileNameWithoutExtension = System.IO.Path.GetFileNameWithoutExtension(filePath);
+            string fileExtension = System.IO.Path.GetExtension(filePath);
+            string timestamp = DateTime.Now.ToString("yyyyMMddHHmmss");
+
+            string newFileName = $"{fileNameWithoutExtension}_{timestamp}{fileExtension}";
+
+            return System.IO.Path.Combine(directory, newFileName);
         }
     }
 }

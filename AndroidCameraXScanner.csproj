@@ -90,6 +90,8 @@
     <None Include="Assets\AboutAssets.txt" />
   </ItemGroup>
   <ItemGroup>
+    <AndroidResource Include="Resources\drawable\round_button.xml" />
+    <AndroidResource Include="Resources\drawable\save_button.xml" />
     <AndroidResource Include="Resources\layout\activity_main.xml">
       <SubType>Designer</SubType>
     </AndroidResource>
@@ -117,7 +119,6 @@
   </ItemGroup>
   <ItemGroup>
     <Folder Include="obj\Debug\android\assets\" />
-    <Folder Include="Resources\drawable\" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="SkiaSharp.Views">

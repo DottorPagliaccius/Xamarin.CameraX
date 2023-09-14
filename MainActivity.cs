@@ -15,6 +15,7 @@ using Java.Util;
 using Java.Util.Concurrent;
 using System.Linq;
 using Android.Views;
+using AndroidX.AppCompat.Widget;
 using CameraX.Handlers;
 using CameraX.Helpers;
 using OpenCV.Android;
@@ -51,6 +52,9 @@ namespace CameraX
         private ImageView _croppedImageView;
         private PreviewView _viewFinder;
         private TextView _fpsTextView;
+        private Button _cameraCaptureButton;
+        private Button _imageSaveButton;
+        private SwitchCompat _flashSwitch;
         
         private void UpdateFps(double fps)
         {
@@ -74,7 +78,13 @@ namespace CameraX
             _imageView = FindViewById<ImageView>(Resource.Id.imageView);
             _croppedImageView = FindViewById<ImageView>(Resource.Id.croppedImageView);
             
+            var flashSwitch = FindViewById<SwitchCompat>(Resource.Id.flashSwitch);
             var cameraCaptureButton = FindViewById<Button>(Resource.Id.camera_capture_button);
+            var imageSaveButton = FindViewById<Button>(Resource.Id.save_button);
+
+            _flashSwitch = flashSwitch;
+            _cameraCaptureButton = cameraCaptureButton;
+            _imageSaveButton = imageSaveButton;
 
             // Request camera permissions   
             string[] permissions = new string[] { Manifest.Permission.Camera, Manifest.Permission.WriteExternalStorage };
@@ -84,7 +94,10 @@ namespace CameraX
                 StartCamera();
 
             // Set up the listener for take photo button
-            cameraCaptureButton.SetOnClickListener(new OnClickListener(() => TakePhoto()));
+            cameraCaptureButton.SetOnClickListener(new OnClickListener(TakePhoto));
+            imageSaveButton.SetOnClickListener(new OnClickListener(ScanButton_Click));
+            flashSwitch.SetOnClickListener(new OnClickListener(flashToggle_click));
+            
             // Set up the touch event handler for your Tap to Focus
             _viewFinder.Touch += ViewFinderOnTouch;
             
@@ -165,7 +178,8 @@ namespace CameraX
                 preview.SetSurfaceProvider(_viewFinder.SurfaceProvider);
                 
                 // Take Photo
-                _imageCapture = new ImageCapture.Builder().Build();
+                _imageCapture = new ImageCapture.Builder()
+                    .Build();
 
                 // Frame by frame analyze
                 var imageAnalyzer = new ImageAnalysis.Builder()
@@ -182,7 +196,7 @@ namespace CameraX
                         _height = image.Height;
                         _width = image.Width;
 
-                        long currentTimestamp = JavaSystem.CurrentTimeMillis();
+                        var currentTimestamp = JavaSystem.CurrentTimeMillis();
                         FrameCount++;
 
                         if (currentTimestamp - LastTimestamp >= 1000) // Calculate FPS every second
@@ -198,20 +212,12 @@ namespace CameraX
      
                         RunOnUiThread(() =>
                         {
-                            if (_captureClicked)
-                            {
-                                _croppedImageView.Visibility = ViewStates.Visible;
-                                _imageView.Visibility = ViewStates.Invisible;
-                                _viewFinder.Visibility = ViewStates.Invisible;
-                                _croppedImageView.SetImageBitmap(_croppedImage);
-                            }
-                            else
-                            {
+                                _cameraCaptureButton.Text = "SCAN";
                                 _imageView.Visibility = ViewStates.Visible;
                                 _viewFinder.Visibility = ViewStates.Visible;
                                 _croppedImageView.Visibility = ViewStates.Invisible;
+                                _imageSaveButton.Visibility = ViewStates.Gone;
                                 _imageView.SetImageBitmap(bitmap);
-                            }
 
                             UpdateFps(Fps);
                         });
@@ -219,11 +225,26 @@ namespace CameraX
                     else
                     {
                         imageProxy.Close();
+                        
+                        // We need this timeout for the TakePhoto() to complete processing
+                        // and assign the latest cropped bitmap to _croppedImage
+                        SystemClock.Sleep(150);
+                        
+                        RunOnUiThread(() =>
+                        {
+                            if (!_captureClicked) return;
+                            _imageSaveButton.Visibility = ViewStates.Visible;
+                            _cameraCaptureButton.Text = "Go Back";
+                            _croppedImageView.Visibility = ViewStates.Visible;
+                            _imageView.Visibility = ViewStates.Invisible;
+                            _viewFinder.Visibility = ViewStates.Invisible;
+                            _croppedImageView.SetImageBitmap(_croppedImage);
+                        });
                     }
                 }));
                 
                 // Select back camera as a default, or front camera otherwise
-                CameraSelector cameraSelector = null;
+                CameraSelector cameraSelector = CameraSelector.DefaultBackCamera;
                 
                 if (cameraProvider.HasCamera(CameraSelector.DefaultBackCamera) == true)
                     cameraSelector = CameraSelector.DefaultBackCamera;
@@ -231,7 +252,7 @@ namespace CameraX
                     cameraSelector = CameraSelector.DefaultFrontCamera;
                 else
                     throw new System.Exception("Camera not found");
-
+                
                 try
                 {
                     // Unbind use cases before rebinding
@@ -252,7 +273,10 @@ namespace CameraX
         private Bitmap OpenCvHelper(Image image, IImageProxy imageProxy)
         {
             var oMat = ColorspaceConversionHelper.Rgba8888ToMat(image);
+            
+            //close image proxy to release analysis frame
             imageProxy.Close();
+            
             var filteredMat = CannyImageDetector.Update(oMat);
 
             if (_captureClicked)
@@ -303,8 +327,6 @@ namespace CameraX
         }
         
         //TODO - 1. Fine-tune cropping area offset
-        //TODO - 2. Give option to save final image
-        //TODO - 3. Make the button look nicer
         //TODO - 4. Make sure original image metadata is preserved
         private void TakePhoto()
         {
@@ -317,17 +339,9 @@ namespace CameraX
 
             // Get a stable reference of the modifiable image capture use case   
             var imageCapture = _imageCapture;
-            if (imageCapture == null)
-                return;
-
-            // Create time-stamped output file to hold the image
-            var photoFile = new File(_outputDirectory, new Java.Text.SimpleDateFormat(FilenameFormat, Locale.Us).Format(JavaSystem.CurrentTimeMillis()) + ".jpg");
-
-            // Create output options object which contains file + metadata
-            var outputOptions = new ImageCapture.OutputFileOptions.Builder(photoFile).Build();
-
+            
             //Access ImageCapture memory buffer
-            imageCapture.TakePicture(ContextCompat.GetMainExecutor(this), new ImageCapturedCallback(
+            imageCapture?.TakePicture(ContextCompat.GetMainExecutor(this), new ImageCapturedCallback(
                 
                 onErrorCallback: (exc) =>
                 {
@@ -341,32 +355,81 @@ namespace CameraX
                     var boundingBox = CannyImageDetector.GetCroppingBoundingBox();
                     if (boundingBox != null)
                     {
-                        // 'croppedBitmap' now contains the∑ cropped portion of the original bitmap
+                        // 'croppedBitmap' now contains the cropped portion of the original bitmap
                         _croppedImage = ImageTransformationHelper.CropOutputImage(output, boundingBox, _height, _width);
                     }
                 }
             ));
+        }
+        
+        private void ScanButton_Click()
+        {
+            Bitmap capturedBitmap = _croppedImage;
+            // Get a stable reference of the modifiable image capture use case   
+            var imageCapture = _imageCapture;
             
-            // Set up image capture listener, which is triggered after photo has been taken
-            // imageCapture.TakePicture(outputOptions, ContextCompat.GetMainExecutor(this), new ImageSaveCallback(
-            //
-            //     onErrorCallback: (exc) =>
-            //     {
-            //         var msg = $"Photo capture failed: {exc.Message}";
-            //         Log.Error(Tag, msg, exc);
-            //         Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
-            //     },
-            //
-            //     onImageSaveCallback: (output) =>
-            //     {
-            //         var savedUri = output.SavedUri;
-            //         var msg = $"Photo capture succeeded: {savedUri}";
-            //         Log.Debug(Tag, msg);
-            //         Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
-            //     }
-            // ));
+            if (capturedBitmap != null)
+            {
+                // Create time-stamped output file to hold the image
+                var croppedPhotoFile = 
+                    new File(_outputDirectory, new Java.Text.SimpleDateFormat(FilenameFormat, Locale.Us).Format(JavaSystem.CurrentTimeMillis()) + ".jpg");
+                
+                var originalPhotoFile = 
+                    new File(_outputDirectory, new Java.Text.SimpleDateFormat(FilenameFormat, Locale.Us).Format(JavaSystem.CurrentTimeMillis()) + "_Org.jpg");
+
+                try
+                {
+                    // Create a FileOutputStream from the photoFile
+                    var fileOutputStream = new System.IO.FileStream(croppedPhotoFile.Path, System.IO.FileMode.Create);
+
+                    // Save the custom Bitmap to the specified file
+                    capturedBitmap.Compress(Bitmap.CompressFormat.Jpeg, 100, fileOutputStream);
+
+                    // Close the stream
+                    fileOutputStream.Close();
+
+                    // Create output options object which contains file + metadata
+                    var outputOptions = new ImageCapture.OutputFileOptions.Builder(originalPhotoFile).Build();
+
+                    // Now, you can pass the outputOptions to the ImageCapture
+                    imageCapture.TakePicture(outputOptions, ContextCompat.GetMainExecutor(this), new ImageSaveCallback(
+                    
+                        onErrorCallback: (exc) =>
+                        {
+                            var msg = $"Photo capture failed: {exc.Message}";
+                            Log.Error(Tag, msg, exc);
+                            Toast.MakeText(this.BaseContext, msg, ToastLength.Short).Show();
+                        },
+                    
+                        onImageSaveCallback: (output) =>
+                        {
+                            var savedUri = output.SavedUri;
+                            var msg = $"Photo capture succeeded: {savedUri}";
+                            Log.Debug(Tag, msg);
+                            Toast.MakeText(BaseContext, msg, ToastLength.Short).Show();
+                        }
+                    ));
+                }
+                catch (Exception ex)
+                {
+                    // Handle any exceptions that may occur while saving the file
+                    Console.WriteLine($"Error: {ex.Message}");
+                }
+            }
+            else
+            {
+                // Handle the case where capturedBitmap is null
+                Toast.MakeText(BaseContext, "No Saved Bitmap in Memory", ToastLength.Short).Show();
+            }
         }
 
+        private void flashToggle_click()
+        {
+            if (_flashSwitch.Checked)
+                _imageCapture.Camera.CameraControl.EnableTorch(true);
+            else _imageCapture.Camera.CameraControl.EnableTorch(false);;
+        }
+        
         // Save photos to => /Pictures/CameraX/
         private File GetOutputDirectory()
         {

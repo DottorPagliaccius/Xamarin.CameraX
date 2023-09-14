@@ -25,10 +25,10 @@ namespace CameraX.Helpers
             var widthScaling = output.Width / analysisFrameWidth;
 
             // Calculate the width and height of the bounding box
-            int cropX = (boundingBox.X * heightScaling) - (400 / heightScaling);
-            int cropY = (boundingBox.Y * widthScaling) - (400/ widthScaling);
-            int cropHeight = (boundingBox.Height * heightScaling) + (400/heightScaling);
-            int cropWidth = (boundingBox.Width * widthScaling) + (400/widthScaling);
+            int cropX = (boundingBox.X * heightScaling) - (50 / heightScaling);
+            int cropY = (boundingBox.Y * widthScaling) - (50/ widthScaling);
+            int cropHeight = (boundingBox.Height * heightScaling) + (100/heightScaling);
+            int cropWidth = (boundingBox.Width * widthScaling) + (100/widthScaling);
 
             // Ensure that the cropping area is within the bounds of the original bitmap
             cropX = Math.Max(0, cropX);
