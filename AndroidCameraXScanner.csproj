@@ -90,6 +90,11 @@
     <None Include="Assets\AboutAssets.txt" />
   </ItemGroup>
   <ItemGroup>
+    <AndroidResource Include="Resources\drawable\baseline_clear_24.xml" />
+    <AndroidResource Include="Resources\drawable\baseline_done_24.xml" />
+    <AndroidResource Include="Resources\drawable\flash_off_24px.xml" />
+    <AndroidResource Include="Resources\drawable\flash_on_24px.xml" />
+    <AndroidResource Include="Resources\drawable\linked_camera_24px.xml" />
     <AndroidResource Include="Resources\drawable\round_button.xml" />
     <AndroidResource Include="Resources\drawable\save_button.xml" />
     <AndroidResource Include="Resources\layout\activity_main.xml">

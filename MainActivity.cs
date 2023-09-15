@@ -14,8 +14,13 @@ using Java.Lang;
 using Java.Util;
 using Java.Util.Concurrent;
 using System.Linq;
+using Android.Content;
+using Android.Graphics;
+using Android.Graphics.Drawables;
+using Android.Net;
 using Android.Views;
 using AndroidX.AppCompat.Widget;
+using AndroidX.ExifInterface.Media;
 using CameraX.Handlers;
 using CameraX.Helpers;
 using OpenCV.Android;
@@ -54,7 +59,7 @@ namespace CameraX
         private TextView _fpsTextView;
         private Button _cameraCaptureButton;
         private Button _imageSaveButton;
-        private SwitchCompat _flashSwitch;
+        private Button _flashSwitch;
         
         private void UpdateFps(double fps)
         {
@@ -78,7 +83,7 @@ namespace CameraX
             _imageView = FindViewById<ImageView>(Resource.Id.imageView);
             _croppedImageView = FindViewById<ImageView>(Resource.Id.croppedImageView);
             
-            var flashSwitch = FindViewById<SwitchCompat>(Resource.Id.flashSwitch);
+            var flashSwitch = FindViewById<Button>(Resource.Id.flashSwitch);
             var cameraCaptureButton = FindViewById<Button>(Resource.Id.camera_capture_button);
             var imageSaveButton = FindViewById<Button>(Resource.Id.save_button);
 
@@ -212,7 +217,8 @@ namespace CameraX
      
                         RunOnUiThread(() =>
                         {
-                                _cameraCaptureButton.Text = "SCAN";
+                                _cameraCaptureButton.SetBackgroundResource(Resource.Drawable.round_button);
+                                _flashSwitch.Visibility = ViewStates.Visible;
                                 _imageView.Visibility = ViewStates.Visible;
                                 _viewFinder.Visibility = ViewStates.Visible;
                                 _croppedImageView.Visibility = ViewStates.Invisible;
@@ -234,7 +240,9 @@ namespace CameraX
                         {
                             if (!_captureClicked) return;
                             _imageSaveButton.Visibility = ViewStates.Visible;
-                            _cameraCaptureButton.Text = "Go Back";
+                            _cameraCaptureButton.SetBackgroundResource(Resource.Drawable.baseline_clear_24);
+                            _imageSaveButton.SetBackgroundResource(Resource.Drawable.baseline_done_24);
+                            _flashSwitch.Visibility = ViewStates.Invisible;
                             _croppedImageView.Visibility = ViewStates.Visible;
                             _imageView.Visibility = ViewStates.Invisible;
                             _viewFinder.Visibility = ViewStates.Invisible;
@@ -364,6 +372,7 @@ namespace CameraX
         
         private void ScanButton_Click()
         {
+            Uri originalUri;
             Bitmap capturedBitmap = _croppedImage;
             // Get a stable reference of the modifiable image capture use case   
             var imageCapture = _imageCapture;
@@ -387,10 +396,10 @@ namespace CameraX
 
                     // Close the stream
                     fileOutputStream.Close();
-
+                    
                     // Create output options object which contains file + metadata
                     var outputOptions = new ImageCapture.OutputFileOptions.Builder(originalPhotoFile).Build();
-
+                    
                     // Now, you can pass the outputOptions to the ImageCapture
                     imageCapture.TakePicture(outputOptions, ContextCompat.GetMainExecutor(this), new ImageSaveCallback(
                     
@@ -403,8 +412,9 @@ namespace CameraX
                     
                         onImageSaveCallback: (output) =>
                         {
-                            var savedUri = output.SavedUri;
-                            var msg = $"Photo capture succeeded: {savedUri}";
+                            originalUri = output.SavedUri;
+                            var msg = $"Photo capture succeeded: {originalUri}";
+                            CloneExifData(originalPhotoFile, croppedPhotoFile, originalUri);
                             Log.Debug(Tag, msg);
                             Toast.MakeText(BaseContext, msg, ToastLength.Short).Show();
                         }
@@ -423,17 +433,67 @@ namespace CameraX
             }
         }
 
+        private static void CloneExifData(File originalPhotoFile, File croppedPhotoFile, Uri originalUri)
+        {
+            // Open the image file with ExifInterface
+            var exif = new ExifInterface(croppedPhotoFile.Path);
+            var originalExif = new ExifInterface(originalPhotoFile.Path);
+            
+            // Define an array of common EXIF tags you want to copy
+            string[] commonExifTags = {
+                ExifInterface.TagDatetimeOriginal,
+                ExifInterface.TagPixelXDimension,
+                ExifInterface.TagPixelYDimension,
+                ExifInterface.TagApertureValue,
+                ExifInterface.TagBrightnessValue,
+                ExifInterface.TagLensModel,
+                ExifInterface.TagShutterSpeedValue,
+                ExifInterface.TagDeviceSettingDescription,
+                ExifInterface.TagLensMake,
+                ExifInterface.TagExposureTime
+                // Add other tags you want to copy here
+            };
+
+            // Loop through the common EXIF tags and copy their values
+            foreach (var tag in commonExifTags)
+            {
+                var originalValue = originalExif.GetAttribute(tag);
+
+                if (originalValue != null)
+                {
+                    // Copy the original EXIF value to the new EXIF object
+                    exif.SetAttribute(tag, originalValue);
+                }
+            }
+            // Save the updated EXIF data
+            exif.SaveAttributes();
+        }
+
         private void flashToggle_click()
         {
-            if (_flashSwitch.Checked)
+            if (_flashSwitch.Activated)
+            {
                 _imageCapture.Camera.CameraControl.EnableTorch(true);
-            else _imageCapture.Camera.CameraControl.EnableTorch(false);;
+                RunOnUiThread(() =>
+                {
+                    _flashSwitch.SetBackgroundResource(Resource.Drawable.flash_on_24px);
+                });
+            }
+            else
+            {
+                _imageCapture.Camera.CameraControl.EnableTorch(false);
+                RunOnUiThread(() =>
+                {
+                    _flashSwitch.SetBackgroundResource(Resource.Drawable.flash_off_24px);
+                });
+            };
         }
         
         // Save photos to => /Pictures/CameraX/
+        //TODO - Need to modify this to save to gallery or scoped storage since external storage is deprecated
         private File GetOutputDirectory()
         {
-            //var mediaDir = GetExternalMediaDirs().FirstOrDefault();  
+            //var mediaDir = GetExternalMediaDirs().FirstOrDefault();
             var mediaDir = Environment.GetExternalStoragePublicDirectory(System.IO.Path.Combine(Environment.DirectoryPictures, Resources.GetString(Resource.String.app_name)));
 
             if (mediaDir != null && mediaDir.Exists())
@@ -443,5 +503,6 @@ namespace CameraX
             file.Mkdirs();
             return file;
         }
+        
     }
 }

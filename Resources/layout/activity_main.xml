@@ -20,18 +20,17 @@
             />
     <Button
             android:id="@+id/save_button"
-            android:layout_width="60dp"
-            android:layout_height="50dp"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
             android:layout_marginBottom="60dp"
             android:layout_marginRight="20dp"
             android:scaleType="fitCenter"
-            android:text="Save"
             android:textColor="#FFFFFF"
             app:layout_constraintRight_toRightOf="parent"
             app:layout_constraintBottom_toBottomOf="parent"
             android:elevation="4dp"
-            android:background="@drawable/save_button"
-            android:visibility="gone"/>
+            android:visibility="gone"
+            android:background="@drawable/baseline_done_24"/>
     />
    <ImageView
               android:id="@+id/imageView"
@@ -49,17 +48,6 @@
                  android:layout_height="match_parent"
                  app:layout_constraintBottom_toBottomOf="parent"
                  />
-         <TextView
-                android:id="@+id/fpsTextView"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="FPS: 0"
-                android:textColor="#FFFFFF"
-                android:background="#80000000"
-                app:layout_constraintBottom_toBottomOf="parent"
-                app:layout_constraintEnd_toEndOf="parent"
-                android:padding="8dp"
-                android:layout_margin="16dp"/>
 
          <Button
                  android:id="@+id/camera_capture_button"
@@ -67,21 +55,50 @@
                  android:layout_height="100dp"
                  android:layout_marginBottom="50dp"
                  android:scaleType="fitCenter"
-                 android:text="Scan"
                  app:layout_constraintLeft_toLeftOf="parent"
                  app:layout_constraintRight_toRightOf="parent"
                  app:layout_constraintBottom_toBottomOf="parent"
                  android:elevation="2dp"
                  android:background="@drawable/round_button"/>
-
-        <androidx.appcompat.widget.SwitchCompat
+        <Button
+                android:id="@+id/camera_wire"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                android:layout_marginBottom="85dp"
+                android:background="@drawable/linked_camera_24px"
+                />
+        <Button
                 android:id="@+id/flashSwitch"
-                android:layout_width="80dp"
+                android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:visibility="visible"
                 app:layout_constraintLeft_toLeftOf="parent"
                 app:layout_constraintBottom_toBottomOf="parent"
-                android:layout_marginBottom="60dp"
-                android:layout_marginLeft="15dp"/>
+                android:layout_marginBottom="76dp"
+                android:layout_marginLeft="64dp"
+                android:background="@drawable/flash_off_24px"/>
     
+    <View
+            android:id="@+id/rectangle_3"
+            android:layout_width="match_parent"
+            android:layout_height="180dp"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:background="#131316"
+            android:alpha="0.7"
+            />
+    <TextView
+            android:id="@+id/fpsTextView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="FPS: 0"
+            android:textColor="#FFFFFF"
+            android:background="#80000000"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent"
+            android:padding="8dp"
+            android:layout_margin="16dp"/>
 </androidx.constraintlayout.widget.ConstraintLayout>

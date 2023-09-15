@@ -120,7 +120,6 @@ namespace CameraX.Handlers
             
             return null;
         }
-        
                 
         [Obsolete]
         public static Mat CropImage()
