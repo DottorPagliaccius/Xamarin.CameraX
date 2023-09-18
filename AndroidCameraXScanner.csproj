@@ -96,6 +96,8 @@
     <AndroidResource Include="Resources\drawable\flash_on_24px.xml" />
     <AndroidResource Include="Resources\drawable\linked_camera_24px.xml" />
     <AndroidResource Include="Resources\drawable\round_button.xml" />
+    <AndroidResource Include="Resources\drawable\round_button_green.xml" />
+    <AndroidResource Include="Resources\drawable\round_button_red.xml" />
     <AndroidResource Include="Resources\drawable\save_button.xml" />
     <AndroidResource Include="Resources\layout\activity_main.xml">
       <SubType>Designer</SubType>

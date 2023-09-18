@@ -15,11 +15,13 @@ using Java.Util;
 using Java.Util.Concurrent;
 using System.Linq;
 using Android.Content;
+using Android.Content.PM;
 using Android.Graphics;
 using Android.Graphics.Drawables;
 using Android.Net;
 using Android.Views;
 using AndroidX.AppCompat.Widget;
+using AndroidX.ConstraintLayout.Widget;
 using AndroidX.ExifInterface.Media;
 using CameraX.Handlers;
 using CameraX.Helpers;
@@ -48,6 +50,7 @@ namespace CameraX
         private int _height;
         private bool _captureClicked;
         private Bitmap _croppedImage;
+        private bool _flashOn = false;
         
         private ICamera _processCameraProvider;
         private ImageCapture _imageCapture;
@@ -58,7 +61,11 @@ namespace CameraX
         private PreviewView _viewFinder;
         private TextView _fpsTextView;
         private Button _cameraCaptureButton;
+        private ImageView _cameraWireIcon;
+        private Button _clearButton;
+        private ImageView _clearIcon;
         private Button _imageSaveButton;
+        private ImageView _saveIcon;
         private Button _flashSwitch;
         
         private void UpdateFps(double fps)
@@ -77,7 +84,8 @@ namespace CameraX
 
             // Set our view from the "main" layout resource
             SetContentView(Resource.Layout.activity_main);
-
+            base.RequestedOrientation = ScreenOrientation.Portrait;
+            
             _viewFinder = FindViewById<PreviewView>(Resource.Id.viewFinder);
             _fpsTextView = FindViewById<TextView>(Resource.Id.fpsTextView);
             _imageView = FindViewById<ImageView>(Resource.Id.imageView);
@@ -86,10 +94,18 @@ namespace CameraX
             var flashSwitch = FindViewById<Button>(Resource.Id.flashSwitch);
             var cameraCaptureButton = FindViewById<Button>(Resource.Id.camera_capture_button);
             var imageSaveButton = FindViewById<Button>(Resource.Id.save_button);
+            var clearButton = FindViewById<Button>(Resource.Id.clear_button);
+            var clearIcon = FindViewById<ImageView>(Resource.Id.clear_icon);
+            var saveIcon = FindViewById<ImageView>(Resource.Id.save_icon);
+            var cameraWireIcon = FindViewById<ImageView>(Resource.Id.camera_wire);
 
             _flashSwitch = flashSwitch;
             _cameraCaptureButton = cameraCaptureButton;
             _imageSaveButton = imageSaveButton;
+            _clearButton = clearButton;
+            _clearIcon = clearIcon;
+            _saveIcon = saveIcon;
+            _cameraWireIcon = cameraWireIcon;
 
             // Request camera permissions   
             string[] permissions = new string[] { Manifest.Permission.Camera, Manifest.Permission.WriteExternalStorage };
@@ -97,9 +113,10 @@ namespace CameraX
                 ActivityCompat.RequestPermissions(this, permissions, RequestCodePermissions);
             else
                 StartCamera();
-
+            
             // Set up the listener for take photo button
             cameraCaptureButton.SetOnClickListener(new OnClickListener(TakePhoto));
+            clearButton.SetOnClickListener(new OnClickListener(TakePhoto));
             imageSaveButton.SetOnClickListener(new OnClickListener(ScanButton_Click));
             flashSwitch.SetOnClickListener(new OnClickListener(flashToggle_click));
             
@@ -217,13 +234,20 @@ namespace CameraX
      
                         RunOnUiThread(() =>
                         {
-                                _cameraCaptureButton.SetBackgroundResource(Resource.Drawable.round_button);
-                                _flashSwitch.Visibility = ViewStates.Visible;
-                                _imageView.Visibility = ViewStates.Visible;
-                                _viewFinder.Visibility = ViewStates.Visible;
-                                _croppedImageView.Visibility = ViewStates.Invisible;
-                                _imageSaveButton.Visibility = ViewStates.Gone;
-                                _imageView.SetImageBitmap(bitmap);
+                            _cameraCaptureButton.Visibility = ViewStates.Visible;
+                            _cameraWireIcon.Visibility = ViewStates.Visible;
+                            
+                            _imageSaveButton.Visibility = ViewStates.Gone;
+                            _saveIcon.Visibility = ViewStates.Gone;
+                                
+                            _clearButton.Visibility = ViewStates.Gone;
+                            _clearIcon.Visibility = ViewStates.Gone;
+                            
+                            _flashSwitch.Visibility = ViewStates.Visible;
+                            _imageView.Visibility = ViewStates.Visible;
+                            _viewFinder.Visibility = ViewStates.Visible;
+                            _croppedImageView.Visibility = ViewStates.Invisible;
+                            _imageView.SetImageBitmap(bitmap);
 
                             UpdateFps(Fps);
                         });
@@ -239,11 +263,24 @@ namespace CameraX
                         RunOnUiThread(() =>
                         {
                             if (!_captureClicked) return;
+                            
+                            //Turn off flash in-case its on
+                            _imageCapture.Camera.CameraControl.EnableTorch(false);
+                            _flashSwitch.SetBackgroundResource(Resource.Drawable.flash_off_24px);
+                            
+                            _cameraCaptureButton.Visibility = ViewStates.Gone;
+                            _cameraWireIcon.Visibility = ViewStates.Gone;
+                            
                             _imageSaveButton.Visibility = ViewStates.Visible;
-                            _cameraCaptureButton.SetBackgroundResource(Resource.Drawable.baseline_clear_24);
-                            _imageSaveButton.SetBackgroundResource(Resource.Drawable.baseline_done_24);
+                            _saveIcon.Visibility = ViewStates.Visible;
+                                
+                            _clearButton.Visibility = ViewStates.Visible;
+                            _clearIcon.Visibility = ViewStates.Visible;
+                                
                             _flashSwitch.Visibility = ViewStates.Invisible;
+                            
                             _croppedImageView.Visibility = ViewStates.Visible;
+            
                             _imageView.Visibility = ViewStates.Invisible;
                             _viewFinder.Visibility = ViewStates.Invisible;
                             _croppedImageView.SetImageBitmap(_croppedImage);
@@ -413,7 +450,7 @@ namespace CameraX
                         onImageSaveCallback: (output) =>
                         {
                             originalUri = output.SavedUri;
-                            var msg = $"Photo capture succeeded: {originalUri}";
+                            var msg = $"Photo capture succeeded: {croppedPhotoFile}";
                             CloneExifData(originalPhotoFile, croppedPhotoFile, originalUri);
                             Log.Debug(Tag, msg);
                             Toast.MakeText(BaseContext, msg, ToastLength.Short).Show();
@@ -447,6 +484,8 @@ namespace CameraX
                 ExifInterface.TagApertureValue,
                 ExifInterface.TagBrightnessValue,
                 ExifInterface.TagLensModel,
+                ExifInterface.TagMake,
+                ExifInterface.TagGpsTrack,
                 ExifInterface.TagShutterSpeedValue,
                 ExifInterface.TagDeviceSettingDescription,
                 ExifInterface.TagLensMake,
@@ -471,9 +510,11 @@ namespace CameraX
 
         private void flashToggle_click()
         {
-            if (_flashSwitch.Activated)
+            if (!_flashOn)
             {
+                _flashOn = true;
                 _imageCapture.Camera.CameraControl.EnableTorch(true);
+                
                 RunOnUiThread(() =>
                 {
                     _flashSwitch.SetBackgroundResource(Resource.Drawable.flash_on_24px);
@@ -481,7 +522,9 @@ namespace CameraX
             }
             else
             {
+                _flashOn = false;
                 _imageCapture.Camera.CameraControl.EnableTorch(false);
+                
                 RunOnUiThread(() =>
                 {
                     _flashSwitch.SetBackgroundResource(Resource.Drawable.flash_off_24px);
@@ -489,7 +532,7 @@ namespace CameraX
             };
         }
         
-        // Save photos to => /Pictures/CameraX/
+        // Save photos to => /Pictures/AndroidCameraXScanner/
         //TODO - Need to modify this to save to gallery or scoped storage since external storage is deprecated
         private File GetOutputDirectory()
         {
@@ -503,6 +546,5 @@ namespace CameraX
             file.Mkdirs();
             return file;
         }
-        
     }
 }
