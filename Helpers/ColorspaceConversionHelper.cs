@@ -1,12 +1,11 @@
 using System;
 using Android.Graphics;
 using Android.Media;
-using Android.Util;
 using Java.Nio;
 using OpenCV.Core;
 using OpenCV.ImgProc;
 
-namespace CameraX.Handlers
+namespace CameraX.Helpers
 {
     public static class ColorspaceConversionHelper
     {

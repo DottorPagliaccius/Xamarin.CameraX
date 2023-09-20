@@ -125,9 +125,6 @@
     <AndroidResource Include="Resources\mipmap-xxxhdpi\ic_launcher_round.png" />
   </ItemGroup>
   <ItemGroup>
-    <Folder Include="obj\Debug\android\assets\" />
-  </ItemGroup>
-  <ItemGroup>
     <PackageReference Include="SkiaSharp.Views">
       <Version>2.88.3</Version>
     </PackageReference>
@@ -203,9 +200,6 @@
   </ItemGroup>
   <ItemGroup>
     <AndroidJavaLibrary Remove="Helpers\YUV\**" />
-  </ItemGroup>
-  <ItemGroup>
-    <Content Include="obj\Debug\android\assets\LibYuvSharp.dll" />
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\Xamarin\Android\Xamarin.Android.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it.

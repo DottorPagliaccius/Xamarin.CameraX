@@ -41,7 +41,7 @@ namespace CameraX
     [Activity(Label = "@string/app_name", Theme = "@style/AppTheme", MainLauncher = true)]
     public class MainActivity : AppCompatActivity
     {
-        private const string Tag = "CameraXBasic";
+        private const string Tag = "Android Document Scanner";
         private const int RequestCodePermissions = 10;
         private const string FilenameFormat = "yyyy-MM-dd-HH-mm-ss-SSS";
         private bool _pauseAnalysis = false;
