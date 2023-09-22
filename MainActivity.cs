@@ -1,4 +1,5 @@
-﻿using Android;
+﻿using System.IO;
+using Android;
 using Android.App;
 using Android.OS;
 using Android.Runtime;
@@ -25,7 +26,9 @@ using AndroidX.ConstraintLayout.Widget;
 using AndroidX.ExifInterface.Media;
 using CameraX.Handlers;
 using CameraX.Helpers;
+using Java.IO;
 using OpenCV.Android;
+using OpenCV.Core;
 using Bitmap = Android.Graphics.Bitmap;
 using Console = System.Console;
 using File = Java.IO.File;
@@ -56,6 +59,7 @@ namespace CameraX
         private ImageCapture _imageCapture;
         private File _outputDirectory;
         private IExecutorService _cameraExecutor;
+        private IImageProxy _imageProxy;
         private ImageView _imageView;
         private ImageView _croppedImageView;
         private PreviewView _viewFinder;
@@ -215,6 +219,7 @@ namespace CameraX
                     {
                         // Get the dimensions of the PreviewView
                         var image = imageProxy.Image;
+                        _imageProxy = imageProxy;
                         _height = image.Height;
                         _width = image.Width;
 
@@ -229,7 +234,7 @@ namespace CameraX
                             Log.Debug("Debug", $"Current FPS data: {Fps}");
                         }
                         
-                        var bitmap = OpenCvHelper(image, imageProxy);
+                        var bitmap = OpenCvHelper(image);
                         imageProxy.Close();
      
                         RunOnUiThread(() =>
@@ -315,12 +320,12 @@ namespace CameraX
             }), ContextCompat.GetMainExecutor(this)); //GetMainExecutor: returns an Executor that runs on the main thread.
         }
 
-        private Bitmap OpenCvHelper(Image image, IImageProxy imageProxy)
+        private Bitmap OpenCvHelper(Image image)
         {
             var oMat = ColorspaceConversionHelper.Rgba8888ToMat(image);
             
             //close image proxy to release analysis frame
-            imageProxy.Close();
+            _imageProxy?.Close();
             
             var filteredMat = CannyImageDetector.Update(oMat);
 
@@ -356,6 +361,14 @@ namespace CameraX
              return rotatedBitmap;
         }
         
+        private void OpenCvAnalyzeFullResOutputImage(Bitmap finalImage)
+        {
+            var oMat = new Mat();
+            Utils.BitmapToMat(finalImage, oMat);
+            
+            CannyImageDetector.Update(oMat);
+        }
+        
         protected override void OnResume()
         {
             base.OnResume();
@@ -371,8 +384,6 @@ namespace CameraX
             }
         }
         
-        //TODO - 1. Fine-tune cropping area offset
-        //TODO - 4. Make sure original image metadata is preserved
         private void TakePhoto()
         {
             if (_captureClicked)
@@ -397,11 +408,13 @@ namespace CameraX
                 
                 onCapturedSuccessCallback: (output) =>
                 {
+
+                    OpenCvAnalyzeFullResOutputImage(output);
                     var boundingBox = CannyImageDetector.GetCroppingBoundingBox();
                     if (boundingBox != null)
                     {
                         // 'croppedBitmap' now contains the cropped portion of the original bitmap
-                        _croppedImage = ImageTransformationHelper.CropOutputImage(output, boundingBox, _height, _width);
+                        _croppedImage = ImageTransformationHelper.CropOutputImageWoTransform(output, boundingBox);
                     }
                 }
             ));
